@@ -1,13 +1,44 @@
 <?php
 /**
- * Security Headers for Pi-Star Dashboard
- * Provides XSS protection while maintaining embeddability for certain components
- * Handles both HTTP and HTTPS deployments
+ * Security headers for the Pi-Star Dashboard.
+ *
+ * Centralises Content-Security-Policy, X-Frame-Options, X-Content-Type-Options,
+ * X-XSS-Protection, Referrer-Policy, Permissions-Policy, and HSTS so every
+ * dashboard entry-point sets the same baseline.
+ *
+ * Three flavours are provided because dashboard pages fall into three
+ * distinct categories:
+ *
+ *   - {@see setSecurityHeaders()}                   — top-level pages
+ *     (index, admin, configure, editors). Locks frame ancestors and frame-src
+ *     to same-origin to prevent the page being framed by a hostile site.
+ *
+ *   - {@see setEmbeddableSecurityHeaders()}         — AJAX-loaded partials
+ *     (last-heard list, local TX, mode info, etc.). Same CSP minus the frame
+ *     restrictions, because the partial is itself loaded into a parent page
+ *     via $.load() and would otherwise refuse to embed.
+ *
+ *   - {@see setSecurityHeadersAllowDifferentPorts()} — pages that iframe
+ *     services on different ports of the same host (e.g. shellinabox SSH on
+ *     a non-80 port). Adds frame-src for the same hostname on any port.
+ *
+ * HSTS is only emitted when the request is over HTTPS (direct or via an
+ * upstream proxy reporting X-Forwarded-Proto). All three functions are
+ * idempotent and bail early if headers have already been sent.
+ *
+ * The CSP intentionally allows 'unsafe-inline' for both scripts and styles
+ * because the dashboard inlines large amounts of JS and inline `style="…"`
+ * attributes; tightening this would require a much larger refactor.
  */
 
 /**
- * Detect if the current request is over HTTPS
- * @return bool True if HTTPS, false if HTTP
+ * Detect whether the current request is being served over HTTPS.
+ *
+ * Checks both direct indicators ($_SERVER['HTTPS'], port 443) and proxy
+ * headers (X-Forwarded-Proto, X-Forwarded-SSL) so we still detect HTTPS
+ * correctly when sitting behind a TLS-terminating proxy.
+ *
+ * @return bool True if the request is over HTTPS, false otherwise.
  */
 function isHttps() {
     // Check standard HTTPS indicators
@@ -137,4 +168,3 @@ function setSecurityHeadersAllowDifferentPorts() {
         }
     }
 }
-?>
