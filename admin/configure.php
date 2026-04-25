@@ -45,6 +45,7 @@
  * fixed).
  */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
+require_once($_SERVER['DOCUMENT_ROOT'].'/config/config_writer.php');
 setSecurityHeaders();
 
 // Get the CPU temp and colour the box accordingly...
@@ -683,15 +684,21 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
       system($rollDashLang);
       }
 
-    // Set the ircDDBGAteway Remote Password and Port
-    if (empty($_POST['confPassword']) != TRUE ) {
-      $rollConfPassword0 = 'sudo sed -i "/remotePassword=/c\\remotePassword='.escapeshellcmd($_POST['confPassword']).'" /etc/ircddbgateway';
-      $rollConfPassword1 = 'sudo sed -i "/password=/c\\password='.escapeshellcmd($_POST['confPassword']).'" /root/.Remote\ Control';
-      $rollConfRemotePort = 'sudo sed -i "/port=/c\\port='.$configs['remotePort'].'" /root/.Remote\ Control';
-      system($rollConfPassword0);
+    // Set the ircDDBGateway Remote Password and Port.
+    //
+    // C6 migration: the /etc/ircddbgateway edit goes through the
+    // config_writer helper (data, not shell). The /root/.Remote Control
+    // edits stay on the legacy `sudo sed -i` path for now — that file
+    // is mode 600 root:root and the helper's PHP-side read can't open
+    // it as www-data. A follow-up will route those through a
+    // sudo-wrapped read+install pattern.
+    if (empty($_POST['confPassword']) != TRUE) {
+      config_writer_stage_flat('/etc/ircddbgateway', 'remotePassword', $_POST['confPassword']);
+      $rollConfPassword1   = 'sudo sed -i "/password=/c\\password='.escapeshellcmd($_POST['confPassword']).'" /root/.Remote\ Control';
+      $rollConfRemotePort  = 'sudo sed -i "/port=/c\\port='.$configs['remotePort'].'" /root/.Remote\ Control';
       system($rollConfPassword1);
       system($rollConfRemotePort);
-      }
+    }
 
     // Set the ircDDBGateway Defaut Reflector
     if (empty($_POST['confDefRef']) != TRUE ) {
@@ -761,66 +768,72 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
       system($rollConfLon1);
       }
 
-    // Set the Town
-    if (empty($_POST['confDesc1']) != TRUE ) {
+    // Set the Town. (C6 migration — sed sites replaced with helper.)
+    if (empty($_POST['confDesc1']) != TRUE) {
       $newConfDesc1 = preg_replace('/[^A-Za-z0-9\.\s\,\-]/', '', $_POST['confDesc1']);
-      $rollDesc1 = 'sudo sed -i "/description1=/c\\description1='.$newConfDesc1.'" /etc/ircddbgateway';
-      $rollDesc11 = 'sudo sed -i "/description1_1=/c\\description1_1='.$newConfDesc1.'" /etc/ircddbgateway';
-      $configmmdvm['Info']['Location'] = '"'.$newConfDesc1.'"';
+      config_writer_stage_flat('/etc/ircddbgateway', 'description1',   $newConfDesc1);
+      config_writer_stage_flat('/etc/ircddbgateway', 'description1_1', $newConfDesc1);
+      $configmmdvm['Info']['Location']      = '"'.$newConfDesc1.'"';
       $configdmrgateway['Info']['Location'] = '"'.$newConfDesc1.'"';
-      $configysf2dmr['Info']['Location'] = '"'.$newConfDesc1.'"';
-      $configysf2nxdn['Info']['Location'] = '"'.$newConfDesc1.'"';
-      $configysf2p25['Info']['Location'] = '"'.$newConfDesc1.'"';
-      $confignxdngateway['Info']['Name'] = '"'.$newConfDesc1.'"';
+      $configysf2dmr['Info']['Location']    = '"'.$newConfDesc1.'"';
+      $configysf2nxdn['Info']['Location']   = '"'.$newConfDesc1.'"';
+      $configysf2p25['Info']['Location']    = '"'.$newConfDesc1.'"';
+      $confignxdngateway['Info']['Name']    = '"'.$newConfDesc1.'"';
       if (isset($configm17gateway['Info']['Name'])) { $configm17gateway['Info']['Name'] = '"'.$newConfDesc1.'"'; }
-      system($rollDesc1);
-      system($rollDesc11);
-      }
+    }
 
-    // Set the Country
-    if (empty($_POST['confDesc2']) != TRUE ) {
+    // Set the Country. (C6 migration — sed sites replaced with helper.)
+    if (empty($_POST['confDesc2']) != TRUE) {
       $newConfDesc2 = preg_replace('/[^A-Za-z0-9\.\s\,\-]/', '', $_POST['confDesc2']);
-      $rollDesc2 = 'sudo sed -i "/description2=/c\\description2='.$newConfDesc2.'" /etc/ircddbgateway';
-      $rollDesc22 = 'sudo sed -i "/description1_2=/c\\description1_2='.$newConfDesc2.'" /etc/ircddbgateway';
-          $configmmdvm['Info']['Description'] = '"'.$newConfDesc2.'"';
-      $configdmrgateway['Info']['Description'] = '"'.$newConfDesc2.'"';
-          $configysfgateway['Info']['Description'] = '"'.$newConfDesc2.'"';
-      $confignxdngateway['Info']['Description'] = '"'.$newConfDesc2.'"';
+      config_writer_stage_flat('/etc/ircddbgateway', 'description2',   $newConfDesc2);
+      config_writer_stage_flat('/etc/ircddbgateway', 'description1_2', $newConfDesc2);
+      $configmmdvm['Info']['Description']         = '"'.$newConfDesc2.'"';
+      $configdmrgateway['Info']['Description']    = '"'.$newConfDesc2.'"';
+      $configysfgateway['Info']['Description']    = '"'.$newConfDesc2.'"';
+      $confignxdngateway['Info']['Description']   = '"'.$newConfDesc2.'"';
       if (isset($configm17gateway['Info']['Description'])) { $configm17gateway['Info']['Description'] = '"'.$newConfDesc2.'"'; }
       if (isset($configdgidgateway)) { $configdgidgateway['Info']['Description'] = '"'.$newConfDesc2.'"'; }
-      system($rollDesc2);
-      system($rollDesc22);
-      }
+    }
 
-    // Set the URL
-    if (empty($_POST['confURL']) != TRUE ) {
+    // Set the URL. (C6 migration — sed sites replaced with helper.)
+    //
+    // Two branches:
+    //   urlAuto=auto → URL is the QRZ database link for the operator's
+    //                  callsign. Server-side-built; no operator URL input.
+    //   urlAuto=man  → URL is the operator's confURL field, sanitised
+    //                  to alphanumeric + . , - / : space (no shell
+    //                  metachars regardless).
+    if (empty($_POST['confURL']) != TRUE) {
       $newConfURL = strtolower(preg_replace('/[^A-Za-z0-9\.\s\,\-\/\:]/', '', $_POST['confURL']));
-      if (escapeshellcmd($_POST['urlAuto']) == 'auto') { $txtURL = "https://www.qrz.com/db/".strtoupper(escapeshellcmd($_POST['confCallsign'])); }
-      if (escapeshellcmd($_POST['urlAuto']) == 'man')  { $txtURL = $newConfURL; }
-      if (escapeshellcmd($_POST['urlAuto']) == 'auto') { $rollURL0 = 'sudo sed -i "/url=/c\\url=https://www.qrz.com/db/'.strtoupper(escapeshellcmd($_POST['confCallsign'])).'" /etc/ircddbgateway';  }
-      if (escapeshellcmd($_POST['urlAuto']) == 'man') { $rollURL0 = 'sudo sed -i "/url=/c\\url='.$newConfURL.'" /etc/ircddbgateway'; }
-          $configmmdvm['Info']['URL'] = $txtURL;
-      $configysf2dmr['Info']['URL'] = $txtURL;
-      $configysf2nxdn['Info']['URL'] = $txtURL;
-      $configysf2p25['Info']['URL'] = $txtURL;
-      $configdmrgateway['Info']['URL'] = $txtURL;
-      system($rollURL0);
+      if ($_POST['urlAuto'] == 'auto') {
+        $txtURL = 'https://www.qrz.com/db/' . strtoupper(escapeshellcmd($_POST['confCallsign']));
+      } else {
+        $txtURL = $newConfURL;
       }
+      config_writer_stage_flat('/etc/ircddbgateway', 'url', $txtURL);
+      $configmmdvm['Info']['URL']      = $txtURL;
+      $configysf2dmr['Info']['URL']    = $txtURL;
+      $configysf2nxdn['Info']['URL']   = $txtURL;
+      $configysf2p25['Info']['URL']    = $txtURL;
+      $configdmrgateway['Info']['URL'] = $txtURL;
+    }
 
-    // Set the APRS Host for ircDDBGateway
-    if (empty($_POST['selectedAPRSHost']) != TRUE ) {
-      $rollAPRSHost = 'sudo sed -i "/aprsHostname=/c\\aprsHostname='.escapeshellcmd($_POST['selectedAPRSHost']).'" /etc/ircddbgateway';
-      system($rollAPRSHost);
-      $configysfgateway['aprs.fi']['Server'] = escapeshellcmd($_POST['selectedAPRSHost']);
-      $configysf2dmr['aprs.fi']['Server'] = escapeshellcmd($_POST['selectedAPRSHost']);
-      $configysf2nxdn['aprs.fi']['Server'] = escapeshellcmd($_POST['selectedAPRSHost']);
-      $configysf2p25['aprs.fi']['Server'] = escapeshellcmd($_POST['selectedAPRSHost']);
-      $configysf2dmr['aprs.fi']['Enable'] = "0";
-      $configysf2nxdn['aprs.fi']['Enable'] = "0";
-      $configysf2p25['aprs.fi']['Enable'] = "0";
+    // Set the APRS Host for ircDDBGateway. (C6 migration — sed sites
+    // replaced with helper. The picklist for selectedAPRSHost is
+    // server-rendered from a fixed list of APRS-IS servers, so the
+    // value reaching this handler should always be a known hostname.)
+    if (empty($_POST['selectedAPRSHost']) != TRUE) {
+      $aprsHost = $_POST['selectedAPRSHost'];
+      config_writer_stage_flat('/etc/ircddbgateway', 'aprsHostname', $aprsHost);
+      $configysfgateway['aprs.fi']['Server'] = $aprsHost;
+      $configysf2dmr['aprs.fi']['Server']    = $aprsHost;
+      $configysf2nxdn['aprs.fi']['Server']   = $aprsHost;
+      $configysf2p25['aprs.fi']['Server']    = $aprsHost;
+      $configysf2dmr['aprs.fi']['Enable']    = "0";
+      $configysf2nxdn['aprs.fi']['Enable']   = "0";
+      $configysf2p25['aprs.fi']['Enable']    = "0";
       if ($configPistarRelease['Pi-Star']['Version'] >= "4.1.4") {
-        $rollAPRSGatewayHost = 'sudo sed -i "/Server=/c\\Server='.escapeshellcmd($_POST['selectedAPRSHost']).'" /etc/aprsgateway';
-        system($rollAPRSGatewayHost);
+        config_writer_stage_flat('/etc/aprsgateway', 'Server', $aprsHost);
       }
     }
 
@@ -3856,6 +3869,16 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
                         }
             }
             }
+    }
+
+    // Flush any flat key=value edits queued via config_writer_stage_flat()
+    // before the daemons come back up. Pass false because we're inside
+    // configure.php's outer mount-rw window already (opened ~line 384,
+    // closed at the bottom of this handler) — we must not let the
+    // helper close the window early.
+    $cfgWriterErrors = config_writer_commit(false);
+    foreach ($cfgWriterErrors as $msg) {
+        error_log('Pi-Star configure.php: ' . $msg);
     }
 
     // Start the DV Services

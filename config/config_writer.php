@@ -175,9 +175,19 @@ function config_writer_stage_flat($path, $key, $value)
  *   4. Atomically copy back via `sudo install -m 644 -o root -g root`.
  *
  * Wraps the per-file install calls in a single mount-rw / mount-ro
- * pair so concurrent POSTs can't race on remount toggles. The mount
- * calls are no-ops when the rootfs is already in the requested state
- * (Pi-Star sometimes has `/` rw between user actions).
+ * pair so concurrent POSTs can't race on remount toggles. Callers
+ * that already manage their own mount cycle (e.g. configure.php's
+ * top-level POST handler, which keeps `/` rw across many edits)
+ * should pass `$manageMount = false` to skip the helper's own
+ * mount-rw/ro — otherwise the helper's mount-ro will prematurely
+ * close the caller's write window.
+ *
+ * @param bool $manageMount Whether commit() should issue its own
+ *                          `sudo mount -o remount,rw /` and
+ *                          `... remount,ro /` around the batch.
+ *                          Default true — safe for one-off callers.
+ *                          Pass false from inside an already-managed
+ *                          mount window.
  *
  * @return array<int,string> Diagnostic strings — empty on full success.
  *                           Non-empty entries describe per-file failures
@@ -185,7 +195,7 @@ function config_writer_stage_flat($path, $key, $value)
  *                           install non-zero exit). The caller decides
  *                           whether to surface to the UI or just log.
  */
-function config_writer_commit()
+function config_writer_commit($manageMount = true)
 {
     $errors = array();
     if (empty($GLOBALS['__config_writer_stage'])) {
@@ -193,11 +203,15 @@ function config_writer_commit()
     }
     $stage = $GLOBALS['__config_writer_stage'];
 
-    // Single mount-rw / batched-install / mount-ro envelope. If the
-    // caller already opened a write window we'll just remount-rw on
-    // an already-rw fs (a no-op) and remount-ro at the end, which is
-    // generally what the caller wanted anyway.
-    system('sudo mount -o remount,rw /');
+    // Optional single mount-rw / batched-install / mount-ro envelope.
+    // When the caller already has `/` open rw (configure.php's POST
+    // handler does this for the duration of a save), we MUST NOT do
+    // our own mount-ro at the end — that would prematurely close the
+    // caller's window and break later writes (e.g. the timezone
+    // handler that runs after this commit).
+    if ($manageMount) {
+        system('sudo mount -o remount,rw /');
+    }
 
     foreach ($stage as $path => $kvPairs) {
         if (!is_readable($path)) {
@@ -262,7 +276,9 @@ function config_writer_commit()
         @unlink($tmp);
     }
 
-    system('sudo mount -o remount,ro /');
+    if ($manageMount) {
+        system('sudo mount -o remount,ro /');
+    }
 
     // Clear the stage so a subsequent commit() call doesn't re-apply
     // already-applied edits.
