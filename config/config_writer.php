@@ -105,6 +105,25 @@ function config_writer_allowed_paths()
         '/etc/mobilegps',
         '/etc/starnetserver',
         '/etc/hostapd/hostapd.conf',
+    );
+}
+
+/**
+ * Allow-list of paths the helper is permitted to write via the
+ * privileged-flat editor (`config_writer_stage_privileged_flat()`).
+ *
+ * Same column-0 `key=value` semantics as the unprivileged flat
+ * editor, but the read step uses `sudo cat` so the helper can
+ * service files that are mode-600 root:root and therefore not
+ * readable by www-data. The destination is restored at mode 600
+ * root:root via `sudo install`. Kept separate from the flat
+ * allowlist because the read path and the install mode differ.
+ *
+ * @return array<int,string>
+ */
+function config_writer_allowed_paths_privileged_flat()
+{
+    return array(
         '/root/.Remote Control',                            // note: literal space in filename
     );
 }
@@ -240,7 +259,53 @@ function config_writer_stage_php_string($path, $varName, $value)
 }
 
 /**
- * Atomically install $newContent at $path with mode 644 root:root.
+ * Stage a single `key=value` edit against a flat config file that
+ * lives under root-only permissions.
+ *
+ * Identical contract to {@see config_writer_stage_flat()} except the
+ * file is read via `sudo cat` instead of the PHP-side `file()` —
+ * because mode-600 root:root paths are not readable by www-data —
+ * and the destination is reinstalled at mode 600 root:root rather
+ * than 644.
+ *
+ * The only currently-allowlisted path is `/root/.Remote Control`,
+ * which holds the ircDDBGateway remote-control password and port.
+ *
+ * @param string $path  Absolute path. Must appear in
+ *                      {@see config_writer_allowed_paths_privileged_flat()}.
+ * @param string $key   Same key contract as the unprivileged flat
+ *                      editor.
+ * @param string $value Same value contract.
+ *
+ * @return bool True if staged. False if rejected.
+ */
+function config_writer_stage_privileged_flat($path, $key, $value)
+{
+    if (!in_array($path, config_writer_allowed_paths_privileged_flat(), true)) {
+        error_log("config_writer: refusing privileged-flat stage for non-allowlisted path '$path'");
+        return false;
+    }
+    if (!preg_match('/\A[A-Za-z_][A-Za-z0-9_]*\z/', $key)) {
+        error_log("config_writer: refusing malformed privileged-flat key '$key' for $path");
+        return false;
+    }
+    if (preg_match('/[\x00\r\n]/', $value)) {
+        error_log("config_writer: refusing privileged-flat value with NUL/CR/LF for $path:$key");
+        return false;
+    }
+
+    if (!isset($GLOBALS['__config_writer_stage_priv'])) {
+        $GLOBALS['__config_writer_stage_priv'] = array();
+    }
+    if (!isset($GLOBALS['__config_writer_stage_priv'][$path])) {
+        $GLOBALS['__config_writer_stage_priv'][$path] = array();
+    }
+    $GLOBALS['__config_writer_stage_priv'][$path][$key] = $value;
+    return true;
+}
+
+/**
+ * Atomically install $newContent at $path with the given mode root:root.
  *
  * Internal helper shared by the flat and php-string commit paths.
  * Returns null on success or a single-line diagnostic on failure.
@@ -252,17 +317,28 @@ function config_writer_stage_php_string($path, $varName, $value)
  *
  * @return string|null Error string, or null on success.
  */
-function _config_writer_install_atomic($path, $newContent)
+function _config_writer_install_atomic($path, $newContent, $mode = '644')
 {
+    // Defence in depth — $mode is never attacker-controlled (the
+    // helper's commit() picks one of two hardcoded values), but we
+    // refuse anything outside the small expected set so a future
+    // typo can't inadvertently widen file permissions.
+    if ($mode !== '644' && $mode !== '600') {
+        return "config_writer: refusing invalid mode '$mode' for $path";
+    }
     $tmp = tempnam('/tmp', 'pistar_cw_');
     if ($tmp === false) {
         return "config_writer: tempnam() failed for $path";
     }
+    // tempnam() creates the file mode 0600 on POSIX, but a non-default
+    // umask could in theory widen it. Force-narrow before writing —
+    // the temp content may be a freshly-set password.
+    @chmod($tmp, 0600);
     if (file_put_contents($tmp, $newContent) === false) {
         @unlink($tmp);
         return "config_writer: file_put_contents() failed for $tmp; $path edits skipped";
     }
-    $cmd = 'sudo install -m 644 -o root -g root '
+    $cmd = 'sudo install -m ' . $mode . ' -o root -g root '
          . escapeshellarg($tmp) . ' '
          . escapeshellarg($path);
     $rc = 0;
@@ -317,8 +393,11 @@ function config_writer_commit($manageMount = true)
     $phpStrStage = isset($GLOBALS['__config_writer_stage_phpstr'])
         ? $GLOBALS['__config_writer_stage_phpstr']
         : array();
+    $privStage = isset($GLOBALS['__config_writer_stage_priv'])
+        ? $GLOBALS['__config_writer_stage_priv']
+        : array();
 
-    if (empty($flatStage) && empty($phpStrStage)) {
+    if (empty($flatStage) && empty($phpStrStage) && empty($privStage)) {
         return $errors;
     }
 
@@ -431,14 +510,61 @@ function config_writer_commit($manageMount = true)
         }
     }
 
+    // Pass 3 — privileged flat key=value edits (root-only files).
+    // Same column-0 `key=` semantics as pass 1, but the read step
+    // uses `sudo cat` so we can service mode-600 root:root paths,
+    // and the install mode is 600 not 644.
+    foreach ($privStage as $path => $kvPairs) {
+        $rc = 0;
+        $out = array();
+        // sudo -n: never prompt — fail loudly if sudoers ever changes.
+        // Output is the file content; stderr captured separately so a
+        // sudo / cat failure doesn't poison the parsed lines.
+        exec('sudo -n cat ' . escapeshellarg($path) . ' 2>/dev/null',
+             $out, $rc);
+        if ($rc !== 0) {
+            $errors[] = "config_writer: sudo cat exit=$rc for $path; privileged edits skipped";
+            error_log("config_writer: sudo cat exit=$rc for $path; "
+                . count($kvPairs) . " privileged edits skipped");
+            continue;
+        }
+        $lines = $out;
+
+        foreach ($kvPairs as $key => $value) {
+            $prefix = $key . '=';
+            $applied = false;
+            foreach ($lines as $i => $line) {
+                if (strpos($line, $prefix) === 0) {
+                    $lines[$i] = $prefix . $value;
+                    $applied = true;
+                    break;
+                }
+            }
+            if (!$applied) {
+                error_log("config_writer: $path has no '$key=' line; privileged edit skipped");
+            }
+        }
+
+        $err = _config_writer_install_atomic(
+            $path,
+            implode("\n", $lines) . "\n",
+            '600'
+        );
+        if ($err !== null) {
+            $errors[] = $err;
+            error_log($err);
+        }
+    }
+
     if ($manageMount) {
         system('sudo mount -o remount,ro /');
     }
 
-    // Clear both stages so a subsequent commit() call doesn't
+    // Clear all stages so a subsequent commit() call doesn't
     // re-apply already-applied edits.
     $GLOBALS['__config_writer_stage'] = array();
     $GLOBALS['__config_writer_stage_phpstr'] = array();
+    $GLOBALS['__config_writer_stage_priv'] = array();
 
     return $errors;
 }

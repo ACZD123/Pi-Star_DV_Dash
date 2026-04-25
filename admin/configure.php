@@ -705,18 +705,31 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
 
     // Set the ircDDBGateway Remote Password and Port.
     //
-    // C6 migration: the /etc/ircddbgateway edit goes through the
-    // config_writer helper (data, not shell). The /root/.Remote Control
-    // edits stay on the legacy `sudo sed -i` path for now — that file
-    // is mode 600 root:root and the helper's PHP-side read can't open
-    // it as www-data. A follow-up will route those through a
-    // sudo-wrapped read+install pattern.
+    // /etc/ircddbgateway is the daemon's primary config; the
+    // /root/.Remote Control sibling file holds the same password
+    // (and the listening port) for the `remotecontrold` CLI tool
+    // that admin/admin.php uses to LINK / UNLINK reflectors.
+    //
+    // Both sites now go through config_writer. The Remote Control
+    // file is mode 600 root:root (not readable by www-data), so it
+    // takes the privileged-flat editor variant which uses `sudo cat`
+    // to read and `sudo install -m 600` to write back.
     if (empty($_POST['confPassword']) != TRUE) {
-      config_writer_stage_flat('/etc/ircddbgateway', 'remotePassword', $_POST['confPassword']);
-      $rollConfPassword1   = 'sudo sed -i "/password=/c\\password='.escapeshellcmd($_POST['confPassword']).'" /root/.Remote\ Control';
-      $rollConfRemotePort  = 'sudo sed -i "/port=/c\\port='.$configs['remotePort'].'" /root/.Remote\ Control';
-      system($rollConfPassword1);
-      system($rollConfRemotePort);
+        config_writer_stage_flat(
+            '/etc/ircddbgateway',
+            'remotePassword',
+            $_POST['confPassword']
+        );
+        config_writer_stage_privileged_flat(
+            '/root/.Remote Control',
+            'password',
+            $_POST['confPassword']
+        );
+        config_writer_stage_privileged_flat(
+            '/root/.Remote Control',
+            'port',
+            $configs['remotePort']
+        );
     }
 
     // Set the ircDDBGateway Defaut Reflector
