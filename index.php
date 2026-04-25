@@ -1,4 +1,37 @@
 <?php
+/**
+ * Dashboard top-level entry point.
+ *
+ * Identical source backs both URL roots:
+ *   - `/`        — public dashboard (read-only)
+ *   - `/admin/`  — admin variant (link/unlink, manage, configure)
+ *
+ * The two are distinguished at runtime by `$_SERVER["PHP_SELF"]`:
+ * admin-only blocks (link managers, BM/TGIF/YSF/P25/NXDN/M17 control,
+ * system reload buttons, etc.) are gated behind the `/admin/index.php`
+ * check below.
+ *
+ * Mode detection — picks rendering path based on which marker file
+ * exists in /etc/:
+ *   /etc/dstar-radio.mmdvmhost     → MMDVMHost mode (multi-protocol):
+ *                                     includes mmdvmhost/repeaterinfo.php
+ *                                     plus per-protocol partials gated by
+ *                                     each `*Network` Enable flag in
+ *                                     /etc/mmdvmhost.
+ *   /etc/dstar-radio.dstarrepeater → dstarrepeater mode (D-Star only):
+ *                                     includes dstarrepeater/* partials
+ *                                     only, driven by ircDDBGateway state.
+ *   Neither marker present         → "No mode defined" page; 10-second
+ *                                     redirect to /admin/configure.php.
+ *
+ * AJAX cadences are baked into the inline <script> blocks below
+ * (1 s repeater info, 1.5 s last-heard / local TX in MMDVM mode, 3 s
+ * D-Star last-heard / local TX, 5 s POCSAG pages, 15 s system info /
+ * reflector links / CSS connections, 180 s BM and TGIF link maps).
+ * Don't naively retune them — they balance UI freshness against PHP /
+ * CPU load on a Raspberry Pi.
+ */
+
 require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
 setSecurityHeaders();
 
@@ -22,14 +55,14 @@ $MYCALL=strtoupper($configs['gatewayCallsign']);
 
 // Check if the config file exists
 if (file_exists('/etc/pistar-css.ini')) {
-	$piStarCssFile = '/etc/pistar-css.ini';
-	if (fopen($piStarCssFile,'r')) { $piStarCss = parse_ini_file($piStarCssFile, true); }
-	if ($piStarCss['BannerH1']['Enabled']) {
-		$piStarCssBannerH1 = $piStarCss['BannerH1']['Text'];
-	}
-	if ($piStarCss['BannerExtText']['Enabled']) {
-		$piStarCssBannerExtTxt = $piStarCss['BannerExtText']['Text'];
-	}
+    $piStarCssFile = '/etc/pistar-css.ini';
+    if (fopen($piStarCssFile,'r')) { $piStarCss = parse_ini_file($piStarCssFile, true); }
+    if ($piStarCss['BannerH1']['Enabled']) {
+        $piStarCssBannerH1 = $piStarCss['BannerH1']['Text'];
+    }
+    if ($piStarCss['BannerExtText']['Enabled']) {
+        $piStarCssBannerExtTxt = $piStarCss['BannerExtText']['Text'];
+    }
 }
 
 //Load the Pi-Star Release file
@@ -127,234 +160,234 @@ if ( ($_SERVER["PHP_SELF"] == "/admin/index.php") && version_compare($configPist
 <?php
 // Output some default features
 if ($_SERVER["PHP_SELF"] == "/admin/index.php") {
-	echo '<div class="contentwide">'."\n";
-	echo '<script type="text/javascript">'."\n";
-	echo 'function reloadSysInfo(){'."\n";
-	echo '  $("#sysInfo").load("/dstarrepeater/system.php",function(){ setTimeout(reloadSysInfo,15000) });'."\n";
-	echo '}'."\n";
-	echo 'setTimeout(reloadSysInfo,15000);'."\n";
-	echo '$(window).trigger(\'resize\');'."\n";
-	echo '</script>'."\n";
-	echo '<div id="sysInfo">'."\n";
-	include 'dstarrepeater/system.php';				// Basic System Info
-	echo '</div>'."\n";
-	echo '</div>'."\n";
-	}
+    echo '<div class="contentwide">'."\n";
+    echo '<script type="text/javascript">'."\n";
+    echo 'function reloadSysInfo(){'."\n";
+    echo '  $("#sysInfo").load("/dstarrepeater/system.php",function(){ setTimeout(reloadSysInfo,15000) });'."\n";
+    echo '}'."\n";
+    echo 'setTimeout(reloadSysInfo,15000);'."\n";
+    echo '$(window).trigger(\'resize\');'."\n";
+    echo '</script>'."\n";
+    echo '<div id="sysInfo">'."\n";
+    include 'dstarrepeater/system.php';                // Basic System Info
+    echo '</div>'."\n";
+    echo '</div>'."\n";
+    }
 // First lets figure out if we are in MMDVMHost mode, or dstarrepeater mode;
 if (file_exists('/etc/dstar-radio.mmdvmhost')) {
-	include 'config/config.php';					// MMDVMDash Config
-	include_once 'mmdvmhost/tools.php';				// MMDVMDash Tools
+    include 'config/config.php';                    // MMDVMDash Config
+    include_once 'mmdvmhost/tools.php';                // MMDVMDash Tools
 
-	function getMMDVMConfigFileContent() {
-		// loads /etc/mmdvmhost into array for further use
-		$conf = array();
-		if ($configs = @fopen('/etc/mmdvmhost', 'r')) {
-			while ($config = fgets($configs)) {
-				array_push($conf, trim ( $config, " \t\n\r\0\x0B"));
-			}
-			fclose($configs);
-		}
-		return $conf;
-	}
-	$mmdvmconfigfile = getMMDVMConfigFileContent();
+    function getMMDVMConfigFileContent() {
+        // loads /etc/mmdvmhost into array for further use
+        $conf = array();
+        if ($configs = @fopen('/etc/mmdvmhost', 'r')) {
+            while ($config = fgets($configs)) {
+                array_push($conf, trim ( $config, " \t\n\r\0\x0B"));
+            }
+            fclose($configs);
+        }
+        return $conf;
+    }
+    $mmdvmconfigfile = getMMDVMConfigFileContent();
 
-	echo '<div class="nav">'."\n";					// Start the Side Menu
-	echo '<script type="text/javascript">'."\n";
-	echo 'function reloadRepeaterInfo(){'."\n";
-	echo '  $("#repeaterInfo").load("/mmdvmhost/repeaterinfo.php",function(){ setTimeout(reloadRepeaterInfo,1000) });'."\n";
-	echo '}'."\n";
-	echo 'setTimeout(reloadRepeaterInfo,1000);'."\n";
-	echo '$(window).trigger(\'resize\');'."\n";
-	echo '</script>'."\n";
-	echo '<div id="repeaterInfo">'."\n";
-	include 'mmdvmhost/repeaterinfo.php';				// MMDVMDash Repeater Info
-	echo '</div>'."\n";
-	echo '</div>'."\n";
+    echo '<div class="nav">'."\n";                    // Start the Side Menu
+    echo '<script type="text/javascript">'."\n";
+    echo 'function reloadRepeaterInfo(){'."\n";
+    echo '  $("#repeaterInfo").load("/mmdvmhost/repeaterinfo.php",function(){ setTimeout(reloadRepeaterInfo,1000) });'."\n";
+    echo '}'."\n";
+    echo 'setTimeout(reloadRepeaterInfo,1000);'."\n";
+    echo '$(window).trigger(\'resize\');'."\n";
+    echo '</script>'."\n";
+    echo '<div id="repeaterInfo">'."\n";
+    include 'mmdvmhost/repeaterinfo.php';                // MMDVMDash Repeater Info
+    echo '</div>'."\n";
+    echo '</div>'."\n";
 
-	echo '<div class="content">'."\n";
+    echo '<div class="content">'."\n";
 
-	$testMMDVModeDSTARnet = getConfigItem("D-Star Network", "Enable", $mmdvmconfigs);
-        if ( $testMMDVModeDSTARnet == 1 ) {				// If D-Star network is enabled, add these extra features.
+    $testMMDVModeDSTARnet = getConfigItem("D-Star Network", "Enable", $mmdvmconfigs);
+        if ( $testMMDVModeDSTARnet == 1 ) {                // If D-Star network is enabled, add these extra features.
 
-	if ($_SERVER["PHP_SELF"] == "/admin/index.php") { 		// Admin Only Option
-		echo '<script type="text/javascript">'."\n";
-		echo 'function reloadrefLinks(){'."\n";
-		echo '  $("#refLinks").load("/dstarrepeater/active_reflector_links.php",function(){ setTimeout(reloadrefLinks,15000) });'."\n";
-		echo '}'."\n";
-		echo 'setTimeout(reloadrefLinks,15000);'."\n";
-		echo '$(window).trigger(\'resize\');'."\n";
-		echo '</script>'."\n";
-		echo '<div id="refLinks">'."\n";
-		include 'dstarrepeater/active_reflector_links.php';	// dstarrepeater gateway config
-	        echo '</div>'."\n";
-	        echo '<br />'."\n";
+    if ($_SERVER["PHP_SELF"] == "/admin/index.php") {         // Admin Only Option
+        echo '<script type="text/javascript">'."\n";
+        echo 'function reloadrefLinks(){'."\n";
+        echo '  $("#refLinks").load("/dstarrepeater/active_reflector_links.php",function(){ setTimeout(reloadrefLinks,15000) });'."\n";
+        echo '}'."\n";
+        echo 'setTimeout(reloadrefLinks,15000);'."\n";
+        echo '$(window).trigger(\'resize\');'."\n";
+        echo '</script>'."\n";
+        echo '<div id="refLinks">'."\n";
+        include 'dstarrepeater/active_reflector_links.php';    // dstarrepeater gateway config
+            echo '</div>'."\n";
+            echo '<br />'."\n";
 
-		include 'dstarrepeater/link_manager.php';		// D-Star Link Manager
-		echo "<br />\n";
-		}
+        include 'dstarrepeater/link_manager.php';        // D-Star Link Manager
+        echo "<br />\n";
+        }
 
         echo '<script type="text/javascript">'."\n";
         echo 'function reloadcssConnections(){'."\n";
         echo '  $("#cssConnects").load("/dstarrepeater/css_connections.php",function(){ setTimeout(reloadcssConnections,15000) });'."\n";
         echo '}'."\n";
         echo 'setTimeout(reloadcssConnections,15000);'."\n";
-	echo '$(window).trigger(\'resize\');'."\n";
+    echo '$(window).trigger(\'resize\');'."\n";
         echo '</script>'."\n";
         echo '<div id="cssConnects">'."\n";
-	include 'dstarrepeater/css_connections.php';			// dstarrepeater gateway config
-	echo '</div>'."\n";
-	}
+    include 'dstarrepeater/css_connections.php';            // dstarrepeater gateway config
+    echo '</div>'."\n";
+    }
 
-	if ($_SERVER["PHP_SELF"] == "/admin/index.php") { 		// Admin Only Option
-		echo '<script type="text/javascript">'."\n";
-        	echo 'function reloadbmConnections(){'."\n";
-        	echo '  $("#bmConnects").load("/mmdvmhost/bm_links.php",function(){ setTimeout(reloadbmConnections,180000) });'."\n";
-        	echo '}'."\n";
-        	echo 'setTimeout(reloadbmConnections,180000);'."\n";
-		echo '$(window).trigger(\'resize\');'."\n";
-        	echo '</script>'."\n";
-        	echo '<div id="bmConnects">'."\n";
-		include 'mmdvmhost/bm_links.php';                       // BM Links
-		echo '</div>'."\n";
-	}
-	if ($_SERVER["PHP_SELF"] == "/admin/index.php") {               // Admin Only Options
+    if ($_SERVER["PHP_SELF"] == "/admin/index.php") {         // Admin Only Option
+        echo '<script type="text/javascript">'."\n";
+            echo 'function reloadbmConnections(){'."\n";
+            echo '  $("#bmConnects").load("/mmdvmhost/bm_links.php",function(){ setTimeout(reloadbmConnections,180000) });'."\n";
+            echo '}'."\n";
+            echo 'setTimeout(reloadbmConnections,180000);'."\n";
+        echo '$(window).trigger(\'resize\');'."\n";
+            echo '</script>'."\n";
+            echo '<div id="bmConnects">'."\n";
+        include 'mmdvmhost/bm_links.php';                       // BM Links
+        echo '</div>'."\n";
+    }
+    if ($_SERVER["PHP_SELF"] == "/admin/index.php") {               // Admin Only Options
                 include 'mmdvmhost/bm_manager.php';                     // BM DMR Link Manager
         }
-	if ($_SERVER["PHP_SELF"] == "/admin/index.php") { 		// Admin Only Option
-		echo '<script type="text/javascript">'."\n";
-        	echo 'function reloadtgifConnections(){'."\n";
-        	echo '  $("#tgifConnects").load("/mmdvmhost/tgif_links.php",function(){ setTimeout(reloadtgifConnections,180000) });'."\n";
-        	echo '}'."\n";
-        	echo 'setTimeout(reloadtgifConnections,180000);'."\n";
-		echo '$(window).trigger(\'resize\');'."\n";
-        	echo '</script>'."\n";
-        	echo '<div id="tgifConnects">'."\n";
-		include 'mmdvmhost/tgif_links.php';			// TGIF Links
-		echo '</div>'."\n";
-	}
-	if ($_SERVER["PHP_SELF"] == "/admin/index.php") {               // Admin Only Options
-                include 'mmdvmhost/tgif_manager.php';			// TGIF DMR Link Manager
+    if ($_SERVER["PHP_SELF"] == "/admin/index.php") {         // Admin Only Option
+        echo '<script type="text/javascript">'."\n";
+            echo 'function reloadtgifConnections(){'."\n";
+            echo '  $("#tgifConnects").load("/mmdvmhost/tgif_links.php",function(){ setTimeout(reloadtgifConnections,180000) });'."\n";
+            echo '}'."\n";
+            echo 'setTimeout(reloadtgifConnections,180000);'."\n";
+        echo '$(window).trigger(\'resize\');'."\n";
+            echo '</script>'."\n";
+            echo '<div id="tgifConnects">'."\n";
+        include 'mmdvmhost/tgif_links.php';            // TGIF Links
+        echo '</div>'."\n";
+    }
+    if ($_SERVER["PHP_SELF"] == "/admin/index.php") {               // Admin Only Options
+                include 'mmdvmhost/tgif_manager.php';            // TGIF DMR Link Manager
         }
-	$testMMDVModeYSFnet = getConfigItem("System Fusion Network", "Enable", $mmdvmconfigs);
-        if ( $testMMDVModeYSFnet == 1 ) {				// If YSF network is enabled, add these extra features.
-		if ($_SERVER["PHP_SELF"] == "/admin/index.php") { 	// Admin Only Option
-			include 'mmdvmhost/ysf_manager.php';		// YSF Links
-		}
-	}
-	$testMMDVModeP25net = getConfigItem("P25 Network", "Enable", $mmdvmconfigs);
-        if ( $testMMDVModeP25net == 1 ) {				// If P25 network is enabled, add these extra features.
-		if ($_SERVER["PHP_SELF"] == "/admin/index.php") { 	// Admin Only Option
-			include 'mmdvmhost/p25_manager.php';		// P25 Links
-		}
-	}
-	$testMMDVModeNXDNnet = getConfigItem("NXDN Network", "Enable", $mmdvmconfigs);
-        if ( $testMMDVModeNXDNnet == 1 ) {				// If NXDN network is enabled, add these extra features.
-		if ($_SERVER["PHP_SELF"] == "/admin/index.php") { 	// Admin Only Option
-			include 'mmdvmhost/nxdn_manager.php';		// NXDN Links
-		}
-	}
-	$testMMDVModeM17net = getConfigItem("M17 Network", "Enable", $mmdvmconfigs);
-        if ( $testMMDVModeM17net == 1 ) {				// If NXDN network is enabled, add these extra features.
-		if ($_SERVER["PHP_SELF"] == "/admin/index.php") { 	// Admin Only Option
-			include 'mmdvmhost/m17_manager.php';		// M17 Links
-		}
-	}
-	echo '<script type="text/javascript">'."\n";
-	echo 'function reloadLocalTx(){'."\n";
-	echo '  $("#localTxs").load("/mmdvmhost/localtx.php",function(){ setTimeout(reloadLocalTx,1500) });'."\n";
-	echo '}'."\n";
-	echo 'setTimeout(reloadLocalTx,1500);'."\n";
-	echo 'function reloadLastHerd(){'."\n";
-	echo '  $("#lastHerd").load("/mmdvmhost/lh.php",function(){ setTimeout(reloadLastHerd,1500) });'."\n";
-	echo '}'."\n";
-	echo 'setTimeout(reloadLastHerd,1500);'."\n";
-	echo '$(window).trigger(\'resize\');'."\n";
-	echo '</script>'."\n";
-	echo '<div id="lastHerd">'."\n";
-	include 'mmdvmhost/lh.php';					// MMDVMDash Last Herd
-	echo '</div>'."\n";
-	echo "<br />\n";
-	echo '<div id="localTxs">'."\n";
-	include 'mmdvmhost/localtx.php';				// MMDVMDash Local Trasmissions
-	echo '</div>'."\n";
-	
-	// If POCSAG is enabled, show the information pannel
-	$testMMDVModePOCSAG = getConfigItem("POCSAG Network", "Enable", $mmdvmconfigfile);
-	if ( $testMMDVModePOCSAG == 1 ) {
-		echo '<script type="text/javascript">'."\n";
-		echo 'function reloadPages(){'."\n";
-		echo '  $("#Pages").load("/mmdvmhost/pages.php",function(){ setTimeout(reloadPages,5000) });'."\n";
-		echo '}'."\n";
-		echo 'setTimeout(reloadPages,5000);'."\n";
-		echo '$(window).trigger(\'resize\');'."\n";
-		echo '</script>'."\n";
-		echo "<br />\n";
-		echo '<div id="Pages">'."\n";
-		include 'mmdvmhost/pages.php';				// POCSAG Messages
-		echo '</div>'."\n";
-	}
+    $testMMDVModeYSFnet = getConfigItem("System Fusion Network", "Enable", $mmdvmconfigs);
+        if ( $testMMDVModeYSFnet == 1 ) {                // If YSF network is enabled, add these extra features.
+        if ($_SERVER["PHP_SELF"] == "/admin/index.php") {     // Admin Only Option
+            include 'mmdvmhost/ysf_manager.php';        // YSF Links
+        }
+    }
+    $testMMDVModeP25net = getConfigItem("P25 Network", "Enable", $mmdvmconfigs);
+        if ( $testMMDVModeP25net == 1 ) {                // If P25 network is enabled, add these extra features.
+        if ($_SERVER["PHP_SELF"] == "/admin/index.php") {     // Admin Only Option
+            include 'mmdvmhost/p25_manager.php';        // P25 Links
+        }
+    }
+    $testMMDVModeNXDNnet = getConfigItem("NXDN Network", "Enable", $mmdvmconfigs);
+        if ( $testMMDVModeNXDNnet == 1 ) {                // If NXDN network is enabled, add these extra features.
+        if ($_SERVER["PHP_SELF"] == "/admin/index.php") {     // Admin Only Option
+            include 'mmdvmhost/nxdn_manager.php';        // NXDN Links
+        }
+    }
+    $testMMDVModeM17net = getConfigItem("M17 Network", "Enable", $mmdvmconfigs);
+        if ( $testMMDVModeM17net == 1 ) {                // If NXDN network is enabled, add these extra features.
+        if ($_SERVER["PHP_SELF"] == "/admin/index.php") {     // Admin Only Option
+            include 'mmdvmhost/m17_manager.php';        // M17 Links
+        }
+    }
+    echo '<script type="text/javascript">'."\n";
+    echo 'function reloadLocalTx(){'."\n";
+    echo '  $("#localTxs").load("/mmdvmhost/localtx.php",function(){ setTimeout(reloadLocalTx,1500) });'."\n";
+    echo '}'."\n";
+    echo 'setTimeout(reloadLocalTx,1500);'."\n";
+    echo 'function reloadLastHerd(){'."\n";
+    echo '  $("#lastHerd").load("/mmdvmhost/lh.php",function(){ setTimeout(reloadLastHerd,1500) });'."\n";
+    echo '}'."\n";
+    echo 'setTimeout(reloadLastHerd,1500);'."\n";
+    echo '$(window).trigger(\'resize\');'."\n";
+    echo '</script>'."\n";
+    echo '<div id="lastHerd">'."\n";
+    include 'mmdvmhost/lh.php';                    // MMDVMDash Last Herd
+    echo '</div>'."\n";
+    echo "<br />\n";
+    echo '<div id="localTxs">'."\n";
+    include 'mmdvmhost/localtx.php';                // MMDVMDash Local Trasmissions
+    echo '</div>'."\n";
+
+    // If POCSAG is enabled, show the information pannel
+    $testMMDVModePOCSAG = getConfigItem("POCSAG Network", "Enable", $mmdvmconfigfile);
+    if ( $testMMDVModePOCSAG == 1 ) {
+        echo '<script type="text/javascript">'."\n";
+        echo 'function reloadPages(){'."\n";
+        echo '  $("#Pages").load("/mmdvmhost/pages.php",function(){ setTimeout(reloadPages,5000) });'."\n";
+        echo '}'."\n";
+        echo 'setTimeout(reloadPages,5000);'."\n";
+        echo '$(window).trigger(\'resize\');'."\n";
+        echo '</script>'."\n";
+        echo "<br />\n";
+        echo '<div id="Pages">'."\n";
+        include 'mmdvmhost/pages.php';                // POCSAG Messages
+        echo '</div>'."\n";
+    }
 
 } elseif (file_exists('/etc/dstar-radio.dstarrepeater')) {
         echo '<div class="contentwide">'."\n";
-	include 'dstarrepeater/gateway_software_config.php';		// dstarrepeater gateway config
-	echo '<script type="text/javascript">'."\n";
-	echo 'function reloadrefLinks(){'."\n";
-	echo '  $("#refLinks").load("/dstarrepeater/active_reflector_links.php",function(){ setTimeout(reloadrefLinks,15000) });'."\n";
-	echo '}'."\n";
-	echo 'setTimeout(reloadrefLinks,15000);'."\n";
-	echo '$(window).trigger(\'resize\');'."\n";
-	echo '</script>'."\n";
+    include 'dstarrepeater/gateway_software_config.php';        // dstarrepeater gateway config
+    echo '<script type="text/javascript">'."\n";
+    echo 'function reloadrefLinks(){'."\n";
+    echo '  $("#refLinks").load("/dstarrepeater/active_reflector_links.php",function(){ setTimeout(reloadrefLinks,15000) });'."\n";
+    echo '}'."\n";
+    echo 'setTimeout(reloadrefLinks,15000);'."\n";
+    echo '$(window).trigger(\'resize\');'."\n";
+    echo '</script>'."\n";
         echo '<br />'."\n";
-	echo '<div id="refLinks">'."\n";
-	include 'dstarrepeater/active_reflector_links.php';		// dstarrepeater gateway config
+    echo '<div id="refLinks">'."\n";
+    include 'dstarrepeater/active_reflector_links.php';        // dstarrepeater gateway config
         echo '</div>'."\n";
         echo '<br />'."\n";
-	if ($_SERVER["PHP_SELF"] == "/admin/index.php") {		// Admin Only Options
-		include 'dstarrepeater/link_manager.php';		// D-Star Link Manager
-		echo "<br />\n";
-		}
+    if ($_SERVER["PHP_SELF"] == "/admin/index.php") {        // Admin Only Options
+        include 'dstarrepeater/link_manager.php';        // D-Star Link Manager
+        echo "<br />\n";
+        }
 
-	echo '<script type="text/javascript">'."\n";
+    echo '<script type="text/javascript">'."\n";
         echo 'function reloadcssConnections(){'."\n";
         echo '  $("#cssConnects").load("/dstarrepeater/css_connections.php",function(){ setTimeout(reloadcssConnections,15000) });'."\n";
         echo '}'."\n";
         echo 'setTimeout(reloadcssConnections,15000);'."\n";
-	echo '$(window).trigger(\'resize\');'."\n";
+    echo '$(window).trigger(\'resize\');'."\n";
         echo '</script>'."\n";
         echo '<div id="cssConnects">'."\n";
-	include 'dstarrepeater/css_connections.php';			// dstarrepeater gateway config
-	echo '</div>'."\n";
+    include 'dstarrepeater/css_connections.php';            // dstarrepeater gateway config
+    echo '</div>'."\n";
 
-	echo '<script type="text/javascript">'."\n";
-	echo 'function reloadLocalTx(){'."\n";
-	echo '  $("#localTx").load("/dstarrepeater/local_tx.php",function(){ setTimeout(reloadLocalTx,3000) });'."\n";
-	echo '}'."\n";
-	echo 'setTimeout(reloadLocalTx,3000);'."\n";
-	echo 'function reloadLastHerd(){'."\n";
-	echo '  $("#lh").load("/dstarrepeater/last_herd.php",function(){ setTimeout(reloadLastHerd,3000) });'."\n";
-	echo '}'."\n";
-	echo 'setTimeout(reloadLastHerd,3000);'."\n";
-	echo '$(window).trigger(\'resize\');'."\n";
-	echo '</script>'."\n";
-	echo '<div id="lh">'."\n";
-	include 'dstarrepeater/last_herd.php';				//dstarrepeater Last Herd
+    echo '<script type="text/javascript">'."\n";
+    echo 'function reloadLocalTx(){'."\n";
+    echo '  $("#localTx").load("/dstarrepeater/local_tx.php",function(){ setTimeout(reloadLocalTx,3000) });'."\n";
+    echo '}'."\n";
+    echo 'setTimeout(reloadLocalTx,3000);'."\n";
+    echo 'function reloadLastHerd(){'."\n";
+    echo '  $("#lh").load("/dstarrepeater/last_herd.php",function(){ setTimeout(reloadLastHerd,3000) });'."\n";
+    echo '}'."\n";
+    echo 'setTimeout(reloadLastHerd,3000);'."\n";
+    echo '$(window).trigger(\'resize\');'."\n";
+    echo '</script>'."\n";
+    echo '<div id="lh">'."\n";
+    include 'dstarrepeater/last_herd.php';                //dstarrepeater Last Herd
         echo '</div>'."\n";
-	echo "<br />\n";
-	echo '<div id="localTx">'."\n";
-	include 'dstarrepeater/local_tx.php';				//dstarrepeater Local Transmissions
+    echo "<br />\n";
+    echo '<div id="localTx">'."\n";
+    include 'dstarrepeater/local_tx.php';                //dstarrepeater Local Transmissions
         echo '</div>'."\n";
         echo '<br />'."\n";
 
 } else {
-	echo '<div class="contentwide">'."\n";
-	//We dont know what mode we are in - fail...
-	echo "<H1>No Mode Defined...</H1>\n";
-	echo "<p>I don't know what mode I am in, you probably just need to configure me.</p>\n";
-	echo "<p>You will be re-directed to the configuration portal in 10 secs</p>\n";
-	echo "<p>In the meantime, you might want to register on the support<br />\n";
-	echo "page here: <a href=\"https://www.facebook.com/groups/pistarusergroup/\" target=\"_new\">https://www.facebook.com/groups/pistarusergroup/</a><br />\n";
-	echo "or the Support forum here: <a href=\"https://forum.pistar.uk/\" target=\"_new\">https://forum.pistar.uk/</a></p>\n";
-	echo '<script type="text/javascript">setTimeout(function() { window.location="/admin/configure.php";},10000);</script>'."\n";
+    echo '<div class="contentwide">'."\n";
+    //We dont know what mode we are in - fail...
+    echo "<H1>No Mode Defined...</H1>\n";
+    echo "<p>I don't know what mode I am in, you probably just need to configure me.</p>\n";
+    echo "<p>You will be re-directed to the configuration portal in 10 secs</p>\n";
+    echo "<p>In the meantime, you might want to register on the support<br />\n";
+    echo "page here: <a href=\"https://www.facebook.com/groups/pistarusergroup/\" target=\"_new\">https://www.facebook.com/groups/pistarusergroup/</a><br />\n";
+    echo "or the Support forum here: <a href=\"https://forum.pistar.uk/\" target=\"_new\">https://forum.pistar.uk/</a></p>\n";
+    echo '<script type="text/javascript">setTimeout(function() { window.location="/admin/configure.php";},10000);</script>'."\n";
 }
 ?>
 </div>
@@ -364,7 +397,7 @@ Pi-Star / Pi-Star Dashboard, &copy; Andy Taylor (MW0MWZ) 2014-<?php echo date("Y
 ircDDBGateway Dashboard by Hans-J. Barthen (DL5DI),<br />
 MMDVMDash developed by Kim Huebel (DG9VH), <br />
 Need help? Click <a style="color: #ffffff;" href="https://www.facebook.com/groups/pistarusergroup/" target="_new">here for the Facebook Group</a><br />
-or Click <a style="color: #ffffff;" href="https://forum.pistar.uk/" target="_new">here to join the Support Forum</a><br />	
+or Click <a style="color: #ffffff;" href="https://forum.pistar.uk/" target="_new">here to join the Support Forum</a><br />
 Get your copy of Pi-Star from <a style="color: #ffffff;" href="http://www.pistar.uk/downloads/" target="_new">here</a>.<br />
 </div>
 
