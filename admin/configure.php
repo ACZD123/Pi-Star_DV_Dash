@@ -381,12 +381,107 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
     // Make the root filesystem writable
     system('sudo mount -o remount,rw /');
 
-    // Admin Password Change
-    if (empty($_POST['adminPassword']) != TRUE ) {
-      $rollAdminPass0 = 'htpasswd -b /var/www/.htpasswd pi-star \''.stripslashes(trim($_POST['adminPassword'])).'\'';
-      system($rollAdminPass0);
-      $rollAdminPass2 = 'sudo echo -e \''.stripslashes(trim($_POST['adminPassword'])).'\n'.stripslashes(trim($_POST['adminPassword'])).'\' | sudo passwd pi-star';
-      system($rollAdminPass2);
+    // Admin Password Change.
+    //
+    // The previous implementation built two shell command strings by
+    // string-concatenating $_POST['adminPassword']:
+    //
+    //   htpasswd -b /var/www/.htpasswd pi-star '<password>'
+    //   sudo echo -e '<password>\n<password>' | sudo passwd pi-star
+    //
+    // A `'` in the password closed the single-quoted argument and ran
+    // arbitrary commands — as `www-data` for htpasswd and as `root` for
+    // the second pipeline (sudo passwd via echo -e is itself a fragile
+    // and locale-sensitive idiom).
+    //
+    // Replaced with proc_open() + stdin pipes — the password never
+    // appears on argv, never reaches a shell. `htpasswd -i` and
+    // `chpasswd` both read the secret from stdin. `chpasswd` is the
+    // standard Debian tool for non-interactive password updates and
+    // honours the system's PAM stack and ENCRYPT_METHOD (SHA512 on
+    // Bookworm), so the resulting shadow entry matches whatever the
+    // rest of the system uses.
+    //
+    // PHP 7.0 caveat: proc_open()'s array form (no shell) is PHP 7.4+.
+    // On 7.0 the string form ALWAYS spawns `/bin/sh -c <string>`. So
+    // every command string passed to proc_open() below is a hardcoded
+    // literal — the only attacker-controlled bytes go via the stdin
+    // pipe, never argv.
+    //
+    // Order matters: chpasswd runs FIRST. If PAM rejects the password
+    // (libpwquality on Bookworm with strict /etc/pam.d/common-password),
+    // we don't want web auth (.htpasswd) to drift out of sync with
+    // shell auth. Only update .htpasswd after chpasswd succeeds.
+    //
+    // The dual-password design (web AND shell) is intentional — see the
+    // file-level docblock and the dashboard's documentation.
+    if (empty($_POST['adminPassword']) != TRUE) {
+      $rawPassword = stripslashes(trim($_POST['adminPassword']));
+
+      // Reject characters chpasswd / htpasswd can't safely accept on
+      // their stdin protocol: NUL splits chpasswd's read; LF/CR are
+      // record separators inside chpasswd's input. Empty is also a
+      // hard reject (htpasswd would fail anyway, but bail early).
+      $hasIllegalChar = preg_match('/[\x00\r\n]/', $rawPassword);
+      $tooLong        = strlen($rawPassword) > 256; // sane cap; SHA512 ignores beyond ~72 bytes anyway
+
+      if ($rawPassword === '' || $hasIllegalChar || $tooLong) {
+        error_log("Pi-Star configure.php: adminPassword rejected (empty, contains NUL/CR/LF, or > 256 bytes)");
+      } else {
+        $descriptors = [
+          0 => ['pipe', 'r'], // child stdin  (we write the password)
+          1 => ['pipe', 'w'], // child stdout (we read)
+          2 => ['pipe', 'w'], // child stderr (we read)
+        ];
+
+        // 1. Linux user `pi-star` via chpasswd. Hardcoded command string;
+        //    payload only on stdin.
+        $cpStdout = '';
+        $cpStderr = '';
+        $cpExit   = 1;
+        $proc = proc_open('sudo -n /usr/sbin/chpasswd', $descriptors, $pipes);
+        if (is_resource($proc)) {
+          fwrite($pipes[0], 'pi-star:' . $rawPassword . "\n");
+          fclose($pipes[0]);                 // EOF — chpasswd commits on stdin close
+          $cpStdout = stream_get_contents($pipes[1]); fclose($pipes[1]);
+          $cpStderr = stream_get_contents($pipes[2]); fclose($pipes[2]);
+          $cpExit   = proc_close($proc);
+        } else {
+          error_log("Pi-Star configure.php: failed to spawn chpasswd; admin password not changed");
+        }
+
+        if ($cpExit !== 0) {
+          // PAM rejection (libpwquality, length, history, etc.) ends up here.
+          error_log("Pi-Star configure.php: chpasswd exit=$cpExit; stderr=" . trim($cpStderr));
+          // Don't update .htpasswd — keep web auth and shell auth in sync.
+        } else {
+          // 2. Apache basic-auth file via htpasswd -i (stdin password).
+          //    `htpasswd` writes to /var/www/.htpasswd directly; that file
+          //    is owned by www-data so no sudo is needed.
+          $proc = proc_open(
+            'htpasswd -i /var/www/.htpasswd pi-star',
+            $descriptors,
+            $pipes
+          );
+          if (is_resource($proc)) {
+            fwrite($pipes[0], $rawPassword);
+            fclose($pipes[0]);
+            stream_get_contents($pipes[1]); fclose($pipes[1]);
+            $htStderr = stream_get_contents($pipes[2]); fclose($pipes[2]);
+            $htExit   = proc_close($proc);
+            if ($htExit !== 0) {
+              // Linux password updated but htpasswd failed — log and
+              // continue. Operator will need to retry to bring the two
+              // back in sync; the dashboard will currently still accept
+              // the OLD basic-auth password.
+              error_log("Pi-Star configure.php: htpasswd exit=$htExit (Linux password updated); stderr=" . trim($htStderr));
+            }
+          } else {
+            error_log("Pi-Star configure.php: failed to spawn htpasswd; basic-auth password not changed");
+          }
+        }
+      }
+
       unset($_POST);
       echo "<table>\n";
       echo "<tr><th>Working...</th></tr>\n";
