@@ -1,4 +1,28 @@
 <?php
+/**
+ * BrandMeister active-connections panel.
+ *
+ * AJAX-loaded partial; refreshed every 180 seconds by /index.php (slow
+ * cadence on purpose — hits the BrandMeister HTTPS API). Renders a
+ * read-only table of static and dynamic talkgroup subscriptions for the
+ * configured DMR ID.
+ *
+ * Inputs:
+ *   - /etc/dmrgateway              DMR network configuration; figures
+ *                                  out which slot is on BrandMeister and
+ *                                  the DMR ID.
+ *   - /etc/bmapi.key               BrandMeister API token. Length sniff
+ *                                  picks endpoint version: short → v1.0,
+ *                                  long → v2 with Bearer auth.
+ *   - /usr/local/etc/DMR_Hosts.txt Master name lookup for display.
+ *   - https://api.brandmeister.network   Live API for TG state.
+ *
+ * Display-only. The companion bm_manager.php provides the link/unlink
+ * form.
+ *
+ * NOTE for the security pass: no setEmbeddableSecurityHeaders() call.
+ */
+
 include_once $_SERVER['DOCUMENT_ROOT'].'/config/config.php';          // MMDVMDash Config
 include_once $_SERVER['DOCUMENT_ROOT'].'/mmdvmhost/tools.php';        // MMDVMDash Tools
 include_once $_SERVER['DOCUMENT_ROOT'].'/mmdvmhost/functions.php';    // MMDVMDash Functions
@@ -110,4 +134,3 @@ if ( $testMMDVModeDMR == 1 ) {
   echo '  <br />'."\n";
   }
 }
-?>

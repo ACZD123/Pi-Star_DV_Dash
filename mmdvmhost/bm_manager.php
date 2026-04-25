@@ -1,4 +1,29 @@
 <?php
+/**
+ * BrandMeister talkgroup link/unlink form (admin-only).
+ *
+ * Loaded inline by /index.php only on the admin path
+ * (`$_SERVER["PHP_SELF"] == "/admin/index.php"` gate). Form fields:
+ *   tgNr     — talkgroup number (numeric, sanitised)
+ *   TS       — DMR slot 1 or 2
+ *   TGmgr    — ADD or DEL (add/remove static)
+ *   dropDyn  — drop dynamic TG (one-shot)
+ *   dropQso  — drop active QSO (one-shot)
+ *
+ * On POST submit, makes HTTPS calls to https://api.brandmeister.network
+ * (POST/GET/DELETE depending on TGmgr / drop* combination), using the
+ * Bearer token loaded from /etc/bmapi.key (long-form v2 token only;
+ * short-form v1.0 tokens are not used by the manage endpoints).
+ *
+ * Triggers a 3 s `setTimeout` reload after submit so the operator sees
+ * the updated bm_links.php panel pick up the change on its next 180 s
+ * refresh — without this, the result wouldn't show until the next
+ * AJAX cycle naturally hit.
+ *
+ * NOTE for the security pass: this file does not call
+ * setEmbeddableSecurityHeaders(). Coverage gap.
+ */
+
 if ($_SERVER["PHP_SELF"] == "/admin/index.php") { // Stop this working outside of the admin page
   include_once $_SERVER['DOCUMENT_ROOT'].'/config/config.php';          // MMDVMDash Config
   include_once $_SERVER['DOCUMENT_ROOT'].'/mmdvmhost/tools.php';        // MMDVMDash Tools
@@ -134,4 +159,5 @@ if ($_SERVER["PHP_SELF"] == "/admin/index.php") { // Stop this working outside o
     }
   }
 }
+
 

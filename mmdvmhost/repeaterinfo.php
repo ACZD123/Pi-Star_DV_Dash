@@ -1,11 +1,41 @@
 <?php
+/**
+ * Repeater information sidebar (MMDVMHost mode).
+ *
+ * The heaviest partial in the dashboard — refreshed every 1 second by
+ * /index.php to give the operator a live view of:
+ *   - "Modes Enabled" / "Net Status" — colour-coded grids painted via
+ *     {@see showMode()} from mmdvmhost/functions.php; one cell per
+ *     protocol covering D-Star, DMR, YSF, P25, NXDN, M17, FM, POCSAG
+ *     plus cross-mode bridges (DMR2YSF, DMR2NXDN, YSF2DMR, YSF2NXDN,
+ *     YSF2P25, "DMR XMode", "YSF XMode").
+ *   - Current TRX state (idle / listening / RX / TX) with mode-aware
+ *     colouring driven by {@see getActualMode()}.
+ *   - TX/RX frequencies, modem firmware, modem TCXO frequency.
+ *   - Per-protocol repeater info: D-Star module/IRC/APRS, DMR ID/CC
+ *     /TS1/TS2/master, YSF host, P25 NAC, NXDN RAN, M17 settings,
+ *     POCSAG frequency, DAPNET / APRS gateway state.
+ *
+ * Data sources: /etc/mmdvmhost (parsed INI), /etc/ircddbgateway (flat
+ * key=value), /etc/{ysf,p25,nxdn,m17,dmr,dapnet,aprs,dgid,ysf2*}gateway,
+ * /etc/dstar-radio.{mmdvmhost,dstarrepeater}, plus log tails for the
+ * "currently linked to" cells.
+ *
+ * Heavy on log-parsing via mmdvmhost/functions.php helpers — see that
+ * file for the underlying substr-offset parsers and example log lines.
+ *
+ * Includes a per-callsign aprspass() implementation (the standard
+ * APRS-IS verification hash) used elsewhere via this file's include
+ * chain.
+ */
+
 require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
 setSecurityHeaders();
 
 include_once $_SERVER['DOCUMENT_ROOT'].'/config/config.php';          // MMDVMDash Config
 include_once $_SERVER['DOCUMENT_ROOT'].'/mmdvmhost/tools.php';        // MMDVMDash Tools
 include_once $_SERVER['DOCUMENT_ROOT'].'/mmdvmhost/functions.php';    // MMDVMDash Functions
-include_once $_SERVER['DOCUMENT_ROOT'].'/config/language.php';	      // Translation Code
+include_once $_SERVER['DOCUMENT_ROOT'].'/config/language.php';          // Translation Code
 
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/ircddblocal.php');
 
@@ -25,12 +55,12 @@ if ($configfile = fopen($gatewayConfigPath,'r')) {
 $configdstar = array();
 if ($configdstarfile = fopen('/etc/dstarrepeater','r')) {
         while ($line1 = fgets($configdstarfile)) {
-		if (strpos($line1, '=') !== false) {
-                	list($key1,$value1) = preg_split('/=/',$line1);
-                	$value1 = trim(str_replace('"','',$value1));
-                	if (strlen($value1) > 0)
-                	$configdstar[$key1] = $value1;
-		}
+        if (strpos($line1, '=') !== false) {
+                    list($key1,$value1) = preg_split('/=/',$line1);
+                    $value1 = trim(str_replace('"','',$value1));
+                    if (strlen($value1) > 0)
+                    $configdstar[$key1] = $value1;
+        }
         }
 }
 
@@ -44,28 +74,28 @@ if (fopen($dapnetGatewayConfigFile,'r')) { $configdapnetgateway = parse_ini_file
 
 // Load the ysf2dmr config file
 if (file_exists('/etc/ysf2dmr')) {
-	$ysf2dmrConfigFile = '/etc/ysf2dmr';
-	if (fopen($ysf2dmrConfigFile,'r')) { $configysf2dmr = parse_ini_file($ysf2dmrConfigFile, true); }
+    $ysf2dmrConfigFile = '/etc/ysf2dmr';
+    if (fopen($ysf2dmrConfigFile,'r')) { $configysf2dmr = parse_ini_file($ysf2dmrConfigFile, true); }
 }
 // Load the ysf2nxdn config file
 if (file_exists('/etc/ysf2nxdn')) {
-	$ysf2nxdnConfigFile = '/etc/ysf2nxdn';
-	if (fopen($ysf2nxdnConfigFile,'r')) { $configysf2nxdn = parse_ini_file($ysf2nxdnConfigFile, true); }
+    $ysf2nxdnConfigFile = '/etc/ysf2nxdn';
+    if (fopen($ysf2nxdnConfigFile,'r')) { $configysf2nxdn = parse_ini_file($ysf2nxdnConfigFile, true); }
 }
 // Load the ysf2p25 config file
 if (file_exists('/etc/ysf2p25')) {
-	$ysf2p25ConfigFile = '/etc/ysf2p25';
-	if (fopen($ysf2p25ConfigFile,'r')) { $configysf2p25 = parse_ini_file($ysf2p25ConfigFile, true); }
+    $ysf2p25ConfigFile = '/etc/ysf2p25';
+    if (fopen($ysf2p25ConfigFile,'r')) { $configysf2p25 = parse_ini_file($ysf2p25ConfigFile, true); }
 }
 // Load the dmr2ysf config file
 if (file_exists('/etc/dmr2ysf')) {
-	$dmr2ysfConfigFile = '/etc/dmr2ysf';
-	if (fopen($dmr2ysfConfigFile,'r')) { $configdmr2ysf = parse_ini_file($dmr2ysfConfigFile, true); }
+    $dmr2ysfConfigFile = '/etc/dmr2ysf';
+    if (fopen($dmr2ysfConfigFile,'r')) { $configdmr2ysf = parse_ini_file($dmr2ysfConfigFile, true); }
 }
 // Load the dmr2nxdn config file
 if (file_exists('/etc/dmr2nxdn')) {
-	$dmr2nxdnConfigFile = '/etc/dmr2nxdn';
-	if (fopen($dmr2nxdnConfigFile,'r')) { $configdmr2nxdn = parse_ini_file($dmr2nxdnConfigFile, true); }
+    $dmr2nxdnConfigFile = '/etc/dmr2nxdn';
+    if (fopen($dmr2nxdnConfigFile,'r')) { $configdmr2nxdn = parse_ini_file($dmr2nxdnConfigFile, true); }
 }
 ?>
 
@@ -95,69 +125,69 @@ if (file_exists('/etc/dmr2nxdn')) {
 <tr><th>Trx</th><?php
 // TRX Status code
 if (isset($lastHeard[0])) {
-	$listElem = $lastHeard[0];
-	if ( $listElem[2] && $listElem[6] == null && $listElem[5] !== 'RF') {
-	        echo "<td style=\"background:#f33;\">TX $listElem[1]</td>";
-	        }
-	        else {
-	        if (getActualMode($lastHeard, $mmdvmconfigs) === 'idle') {
-	                echo "<td style=\"background:#0b0; color:#030;\">Listening</td>";
-	                }
-	        elseif (getActualMode($lastHeard, $mmdvmconfigs) === NULL) {
-	                if (isProcessRunning("MMDVMHost")) { echo "<td style=\"background:#0b0; color:#030;\">Listening</td>"; } else { echo "<td style=\"background:#606060; color:#b0b0b0;\">OFFLINE</td>"; }
-	                }
-	        elseif ($listElem[2] && $listElem[6] == null && getActualMode($lastHeard, $mmdvmconfigs) === 'D-Star') {
-	                echo "<td style=\"background:#4aa361;\">RX D-Star</td>";
-	                }
-	        elseif (getActualMode($lastHeard, $mmdvmconfigs) === 'D-Star') {
-	                echo "<td style=\"background:#ade;\">Listening D-Star</td>";
-	                }
-	        elseif ($listElem[2] && $listElem[6] == null && getActualMode($lastHeard, $mmdvmconfigs) === 'DMR') {
-	                echo "<td style=\"background:#4aa361;\">RX DMR</td>";
-	                }
-	        elseif (getActualMode($lastHeard, $mmdvmconfigs) === 'DMR') {
-	                echo "<td style=\"background:#f93;\">Listening DMR</td>";
-	                }
-	        elseif ($listElem[2] && $listElem[6] == null && getActualMode($lastHeard, $mmdvmconfigs) === 'YSF') {
-	                echo "<td style=\"background:#4aa361;\">RX YSF</td>";
-	                }
-	        elseif (getActualMode($lastHeard, $mmdvmconfigs) === 'YSF') {
-	                echo "<td style=\"background:#ff9;\">Listening YSF</td>";
-	                }
-	        elseif ($listElem[2] && $listElem[6] == null && getActualMode($lastHeard, $mmdvmconfigs) === 'P25') {
-        	        echo "<td style=\"background:#4aa361;\">RX P25</td>";
-        	        }
-        	elseif (getActualMode($lastHeard, $mmdvmconfigs) === 'P25') {
-        	        echo "<td style=\"background:#f9f;\">Listening P25</td>";
-        	        }
-		elseif ($listElem[2] && $listElem[6] == null && getActualMode($lastHeard, $mmdvmconfigs) === 'NXDN') {
-        	        echo "<td style=\"background:#4aa361;\">RX NXDN</td>";
-        	        }
-        	elseif (getActualMode($lastHeard, $mmdvmconfigs) === 'NXDN') {
-        	        echo "<td style=\"background:#c9f;\">Listening NXDN</td>";
-        	        }
-		elseif ($listElem[2] && $listElem[6] == null && getActualMode($lastHeard, $mmdvmconfigs) === 'M17') {
-        	        echo "<td style=\"background:#4aa361;\">RX M17</td>";
-        	        }
-        	elseif (getActualMode($lastHeard, $mmdvmconfigs) === 'M17') {
-        	        echo "<td style=\"background:#f9f;\">Listening M17</td>";
-        	        }
-		elseif ($listElem[2] && $listElem[6] == null && getActualMode($lastHeard, $mmdvmconfigs) === 'FM') {
-        	        echo "<td style=\"background:#4aa361;\">RX FM</td>";
-        	        }
-        	elseif (getActualMode($lastHeard, $mmdvmconfigs) === 'FM') {
-        	        echo "<td style=\"background:#f9f;\">Listening FM</td>";
-        	        }
-		elseif (getActualMode($lastHeard, $mmdvmconfigs) === 'POCSAG') {
-        	        echo "<td style=\"background:#4aa361;\">POCSAG</td>";
-        	        }
-        	else {
-        	        echo "<td>".getActualMode($lastHeard, $mmdvmconfigs)."</td>";
-        	        }
-		}
-	}
+    $listElem = $lastHeard[0];
+    if ( $listElem[2] && $listElem[6] == null && $listElem[5] !== 'RF') {
+            echo "<td style=\"background:#f33;\">TX $listElem[1]</td>";
+            }
+            else {
+            if (getActualMode($lastHeard, $mmdvmconfigs) === 'idle') {
+                    echo "<td style=\"background:#0b0; color:#030;\">Listening</td>";
+                    }
+            elseif (getActualMode($lastHeard, $mmdvmconfigs) === NULL) {
+                    if (isProcessRunning("MMDVMHost")) { echo "<td style=\"background:#0b0; color:#030;\">Listening</td>"; } else { echo "<td style=\"background:#606060; color:#b0b0b0;\">OFFLINE</td>"; }
+                    }
+            elseif ($listElem[2] && $listElem[6] == null && getActualMode($lastHeard, $mmdvmconfigs) === 'D-Star') {
+                    echo "<td style=\"background:#4aa361;\">RX D-Star</td>";
+                    }
+            elseif (getActualMode($lastHeard, $mmdvmconfigs) === 'D-Star') {
+                    echo "<td style=\"background:#ade;\">Listening D-Star</td>";
+                    }
+            elseif ($listElem[2] && $listElem[6] == null && getActualMode($lastHeard, $mmdvmconfigs) === 'DMR') {
+                    echo "<td style=\"background:#4aa361;\">RX DMR</td>";
+                    }
+            elseif (getActualMode($lastHeard, $mmdvmconfigs) === 'DMR') {
+                    echo "<td style=\"background:#f93;\">Listening DMR</td>";
+                    }
+            elseif ($listElem[2] && $listElem[6] == null && getActualMode($lastHeard, $mmdvmconfigs) === 'YSF') {
+                    echo "<td style=\"background:#4aa361;\">RX YSF</td>";
+                    }
+            elseif (getActualMode($lastHeard, $mmdvmconfigs) === 'YSF') {
+                    echo "<td style=\"background:#ff9;\">Listening YSF</td>";
+                    }
+            elseif ($listElem[2] && $listElem[6] == null && getActualMode($lastHeard, $mmdvmconfigs) === 'P25') {
+                    echo "<td style=\"background:#4aa361;\">RX P25</td>";
+                    }
+            elseif (getActualMode($lastHeard, $mmdvmconfigs) === 'P25') {
+                    echo "<td style=\"background:#f9f;\">Listening P25</td>";
+                    }
+        elseif ($listElem[2] && $listElem[6] == null && getActualMode($lastHeard, $mmdvmconfigs) === 'NXDN') {
+                    echo "<td style=\"background:#4aa361;\">RX NXDN</td>";
+                    }
+            elseif (getActualMode($lastHeard, $mmdvmconfigs) === 'NXDN') {
+                    echo "<td style=\"background:#c9f;\">Listening NXDN</td>";
+                    }
+        elseif ($listElem[2] && $listElem[6] == null && getActualMode($lastHeard, $mmdvmconfigs) === 'M17') {
+                    echo "<td style=\"background:#4aa361;\">RX M17</td>";
+                    }
+            elseif (getActualMode($lastHeard, $mmdvmconfigs) === 'M17') {
+                    echo "<td style=\"background:#f9f;\">Listening M17</td>";
+                    }
+        elseif ($listElem[2] && $listElem[6] == null && getActualMode($lastHeard, $mmdvmconfigs) === 'FM') {
+                    echo "<td style=\"background:#4aa361;\">RX FM</td>";
+                    }
+            elseif (getActualMode($lastHeard, $mmdvmconfigs) === 'FM') {
+                    echo "<td style=\"background:#f9f;\">Listening FM</td>";
+                    }
+        elseif (getActualMode($lastHeard, $mmdvmconfigs) === 'POCSAG') {
+                    echo "<td style=\"background:#4aa361;\">POCSAG</td>";
+                    }
+            else {
+                    echo "<td>".getActualMode($lastHeard, $mmdvmconfigs)."</td>";
+                    }
+        }
+    }
 else {
-	echo "<td></td>";
+    echo "<td></td>";
 }
 ?></tr>
 <tr><th>Tx</th><td style="background: #ffffff;"><?php echo getMHZ(getConfigItem("Info", "TXFrequency", $mmdvmconfigs)); ?></td></tr>
@@ -182,10 +212,10 @@ echo "<tr><th>RPT1</th><td style=\"background: #ffffff;\">".str_replace(' ', '&n
 echo "<tr><th>RPT2</th><td style=\"background: #ffffff;\">".str_replace(' ', '&nbsp;', $configdstar['gateway'])."</td></tr>\n";
 echo "<tr><th colspan=\"2\">".$lang['dstar_net']."</th></tr>\n";
 if ($configs['aprsEnabled']) {
-	echo "<tr><th>APRS</th><td style=\"background: #ffffff;\">".substr($configs['aprsHostname'], 0, 16)."</td></tr>\n";
+    echo "<tr><th>APRS</th><td style=\"background: #ffffff;\">".substr($configs['aprsHostname'], 0, 16)."</td></tr>\n";
 }
 if ($configs['ircddbEnabled']) {
-	echo "<tr><th>IRC</th><td style=\"background: #ffffff;\">".substr($configs['ircddbHostname'], 0 ,16)."</td></tr>\n";
+    echo "<tr><th>IRC</th><td style=\"background: #ffffff;\">".substr($configs['ircddbHostname'], 0 ,16)."</td></tr>\n";
 }
 echo "<tr><td colspan=\"2\" style=\"background: #ffffff;\">".getActualLink($reverseLogLinesMMDVM, "D-Star")."</td></tr>\n";
 echo "</table>\n";
@@ -197,40 +227,40 @@ $dmrMasterFile = fopen("/usr/local/etc/DMR_Hosts.txt", "r");
 $dmrMasterHost = getConfigItem("DMR Network", "Address", $mmdvmconfigs);
 $dmrMasterPort = getConfigItem("DMR Network", "Port", $mmdvmconfigs);
 if ($dmrMasterHost == '127.0.0.1') {
-	if (isset($configdmrgateway['XLX Network 1']['Address'])) { $xlxMasterHost1 = $configdmrgateway['XLX Network 1']['Address']; }
-	else { $xlxMasterHost1 = ""; }
-	$dmrMasterHost1 = $configdmrgateway['DMR Network 1']['Address'];
-	$dmrMasterHost2 = $configdmrgateway['DMR Network 2']['Address'];
-	$dmrMasterHost3 = str_replace('_', ' ', $configdmrgateway['DMR Network 3']['Name']);
-	if (isset($configdmrgateway['DMR Network 4']['Name'])) {$dmrMasterHost4 = str_replace('_', ' ', $configdmrgateway['DMR Network 4']['Name']);}
-	if (isset($configdmrgateway['DMR Network 5']['Name'])) {$dmrMasterHost5 = str_replace('_', ' ', $configdmrgateway['DMR Network 5']['Name']);}
-	if (isset($configdmrgateway['DMR Network 6']['Name'])) {$dmrMasterHost6 = str_replace('_', ' ', $configdmrgateway['DMR Network 6']['Name']);}
-	while (!feof($dmrMasterFile)) {
-		$dmrMasterLine = fgets($dmrMasterFile);
+    if (isset($configdmrgateway['XLX Network 1']['Address'])) { $xlxMasterHost1 = $configdmrgateway['XLX Network 1']['Address']; }
+    else { $xlxMasterHost1 = ""; }
+    $dmrMasterHost1 = $configdmrgateway['DMR Network 1']['Address'];
+    $dmrMasterHost2 = $configdmrgateway['DMR Network 2']['Address'];
+    $dmrMasterHost3 = str_replace('_', ' ', $configdmrgateway['DMR Network 3']['Name']);
+    if (isset($configdmrgateway['DMR Network 4']['Name'])) {$dmrMasterHost4 = str_replace('_', ' ', $configdmrgateway['DMR Network 4']['Name']);}
+    if (isset($configdmrgateway['DMR Network 5']['Name'])) {$dmrMasterHost5 = str_replace('_', ' ', $configdmrgateway['DMR Network 5']['Name']);}
+    if (isset($configdmrgateway['DMR Network 6']['Name'])) {$dmrMasterHost6 = str_replace('_', ' ', $configdmrgateway['DMR Network 6']['Name']);}
+    while (!feof($dmrMasterFile)) {
+        $dmrMasterLine = fgets($dmrMasterFile);
                 $dmrMasterHostF = preg_split('/\s+/', $dmrMasterLine);
-		if ((count($dmrMasterHostF) >= 2) && (strpos($dmrMasterHostF[0], '#') === FALSE) && ($dmrMasterHostF[0] != '')) {
-			if ((strpos($dmrMasterHostF[0], 'XLX_') === 0) && ($xlxMasterHost1 == $dmrMasterHostF[2])) { $xlxMasterHost1 = str_replace('_', ' ', $dmrMasterHostF[0]); }
-			if ((strpos($dmrMasterHostF[0], 'BM_') === 0) && ($dmrMasterHost1 == $dmrMasterHostF[2])) { $dmrMasterHost1 = str_replace('_', ' ', $dmrMasterHostF[0]); }
-			if ((strpos($dmrMasterHostF[0], 'DMR+_') === 0) && ($dmrMasterHost2 == $dmrMasterHostF[2])) { $dmrMasterHost2 = str_replace('_', ' ', $dmrMasterHostF[0]); }
-		}
-	}
-	if (strlen($xlxMasterHost1) > 19) { $xlxMasterHost1 = substr($xlxMasterHost1, 0, 17) . '..'; }
-	if (strlen($dmrMasterHost1) > 19) { $dmrMasterHost1 = substr($dmrMasterHost1, 0, 17) . '..'; }
-	if (strlen($dmrMasterHost2) > 19) { $dmrMasterHost2 = substr($dmrMasterHost2, 0, 17) . '..'; }
-	if (strlen($dmrMasterHost3) > 19) { $dmrMasterHost3 = substr($dmrMasterHost3, 0, 17) . '..'; }
-	if (isset($dmrMasterHost4)) { if (strlen($dmrMasterHost4) > 19) { $dmrMasterHost4 = substr($dmrMasterHost4, 0, 17) . '..'; } }
-	if (isset($dmrMasterHost5)) { if (strlen($dmrMasterHost5) > 19) { $dmrMasterHost5 = substr($dmrMasterHost5, 0, 17) . '..'; } }
-	if (isset($dmrMasterHost6)) { if (strlen($dmrMasterHost6) > 19) { $dmrMasterHost6 = substr($dmrMasterHost6, 0, 17) . '..'; } }
+        if ((count($dmrMasterHostF) >= 2) && (strpos($dmrMasterHostF[0], '#') === FALSE) && ($dmrMasterHostF[0] != '')) {
+            if ((strpos($dmrMasterHostF[0], 'XLX_') === 0) && ($xlxMasterHost1 == $dmrMasterHostF[2])) { $xlxMasterHost1 = str_replace('_', ' ', $dmrMasterHostF[0]); }
+            if ((strpos($dmrMasterHostF[0], 'BM_') === 0) && ($dmrMasterHost1 == $dmrMasterHostF[2])) { $dmrMasterHost1 = str_replace('_', ' ', $dmrMasterHostF[0]); }
+            if ((strpos($dmrMasterHostF[0], 'DMR+_') === 0) && ($dmrMasterHost2 == $dmrMasterHostF[2])) { $dmrMasterHost2 = str_replace('_', ' ', $dmrMasterHostF[0]); }
+        }
+    }
+    if (strlen($xlxMasterHost1) > 19) { $xlxMasterHost1 = substr($xlxMasterHost1, 0, 17) . '..'; }
+    if (strlen($dmrMasterHost1) > 19) { $dmrMasterHost1 = substr($dmrMasterHost1, 0, 17) . '..'; }
+    if (strlen($dmrMasterHost2) > 19) { $dmrMasterHost2 = substr($dmrMasterHost2, 0, 17) . '..'; }
+    if (strlen($dmrMasterHost3) > 19) { $dmrMasterHost3 = substr($dmrMasterHost3, 0, 17) . '..'; }
+    if (isset($dmrMasterHost4)) { if (strlen($dmrMasterHost4) > 19) { $dmrMasterHost4 = substr($dmrMasterHost4, 0, 17) . '..'; } }
+    if (isset($dmrMasterHost5)) { if (strlen($dmrMasterHost5) > 19) { $dmrMasterHost5 = substr($dmrMasterHost5, 0, 17) . '..'; } }
+    if (isset($dmrMasterHost6)) { if (strlen($dmrMasterHost6) > 19) { $dmrMasterHost6 = substr($dmrMasterHost6, 0, 17) . '..'; } }
 }
 else {
-	while (!feof($dmrMasterFile)) {
-		$dmrMasterLine = fgets($dmrMasterFile);
+    while (!feof($dmrMasterFile)) {
+        $dmrMasterLine = fgets($dmrMasterFile);
                 $dmrMasterHostF = preg_split('/\s+/', $dmrMasterLine);
-		if ((count($dmrMasterHostF) >= 4) && (strpos($dmrMasterHostF[0], '#') === FALSE) && ($dmrMasterHostF[0] != '')) {
-			if (($dmrMasterHost == $dmrMasterHostF[2]) && ($dmrMasterPort == $dmrMasterHostF[4])) { $dmrMasterHost = str_replace('_', ' ', $dmrMasterHostF[0]); }
-		}
-	}
-	if (strlen($dmrMasterHost) > 19) { $dmrMasterHost = substr($dmrMasterHost, 0, 17) . '..'; }
+        if ((count($dmrMasterHostF) >= 4) && (strpos($dmrMasterHostF[0], '#') === FALSE) && ($dmrMasterHostF[0] != '')) {
+            if (($dmrMasterHost == $dmrMasterHostF[2]) && ($dmrMasterPort == $dmrMasterHostF[4])) { $dmrMasterHost = str_replace('_', ' ', $dmrMasterHostF[0]); }
+        }
+    }
+    if (strlen($dmrMasterHost) > 19) { $dmrMasterHost = substr($dmrMasterHost, 0, 17) . '..'; }
 }
 fclose($dmrMasterFile);
 
@@ -245,50 +275,50 @@ echo "<tr><th>TS2</th>";
 if (getConfigItem("DMR Network", "Slot2", $mmdvmconfigs) == 1) { echo "<td style=\"background:#0b0;\">enabled</td></tr>\n"; } else { echo "<td style=\"background:#606060; color:#b0b0b0;\">disabled</td></tr>\n"; }
 echo "<tr><th colspan=\"2\">".$lang['dmr_master']."</th></tr>\n";
 if (getEnabled("DMR Network", $mmdvmconfigs) == 1) {
-		if ($dmrMasterHost == '127.0.0.1') {
-			if ((isset($configdmrgateway['XLX Network 1']['Enabled'])) && ($configdmrgateway['XLX Network 1']['Enabled'] == 1)) {
-				echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$xlxMasterHost1."</td></tr>\n";
-			}
+        if ($dmrMasterHost == '127.0.0.1') {
+            if ((isset($configdmrgateway['XLX Network 1']['Enabled'])) && ($configdmrgateway['XLX Network 1']['Enabled'] == 1)) {
+                echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$xlxMasterHost1."</td></tr>\n";
+            }
                         if ( !isset($configdmrgateway['XLX Network 1']['Enabled']) && isset($configdmrgateway['XLX Network']['Enabled']) && $configdmrgateway['XLX Network']['Enabled'] == 1) {
-				if (file_exists("/var/log/pi-star/DMRGateway-".gmdate("Y-m-d").".log")) { $xlxMasterHost1 = exec('grep \'XLX, Linking\|XLX, Unlinking\|XLX, Logged\' /var/log/pi-star/DMRGateway-'.gmdate("Y-m-d").'.log | tail -1 | awk \'{print $5 " " $8 " " $9}\''); }
+                if (file_exists("/var/log/pi-star/DMRGateway-".gmdate("Y-m-d").".log")) { $xlxMasterHost1 = exec('grep \'XLX, Linking\|XLX, Unlinking\|XLX, Logged\' /var/log/pi-star/DMRGateway-'.gmdate("Y-m-d").'.log | tail -1 | awk \'{print $5 " " $8 " " $9}\''); }
                                 else { $xlxMasterHost1 = exec('grep \'XLX, Linking\|XLX, Unlinking\|XLX, Logged\' /var/log/pi-star/DMRGateway-'.gmdate("Y-m-d", time() - 86340).'.log | tail -1 | awk \'{print $5 " " $8 " " $9}\''); }
-				if ( strpos($xlxMasterHost1, 'Linking') !== false ) { $xlxMasterHost1 = str_replace('Linking ', '', $xlxMasterHost1); }
-				else if ( strpos($xlxMasterHost1, 'Unlinking') !== false ) { $xlxMasterHost1 = "XLX Not Linked"; }
-				else if ( strpos($xlxMasterHost1, 'Logged') !== false ) { $xlxMasterHost1 = "XLX Not Linked"; }
-				echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$xlxMasterHost1."</td></tr>\n";
+                if ( strpos($xlxMasterHost1, 'Linking') !== false ) { $xlxMasterHost1 = str_replace('Linking ', '', $xlxMasterHost1); }
+                else if ( strpos($xlxMasterHost1, 'Unlinking') !== false ) { $xlxMasterHost1 = "XLX Not Linked"; }
+                else if ( strpos($xlxMasterHost1, 'Logged') !== false ) { $xlxMasterHost1 = "XLX Not Linked"; }
+                echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$xlxMasterHost1."</td></tr>\n";
                         }
-			if ($configdmrgateway['DMR Network 1']['Enabled'] == 1) {
-				echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$dmrMasterHost1."</td></tr>\n";
-			}
-			if ($configdmrgateway['DMR Network 2']['Enabled'] == 1) {
-				echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$dmrMasterHost2."</td></tr>\n";
-			}
-			if ($configdmrgateway['DMR Network 3']['Enabled'] == 1) {
-				echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$dmrMasterHost3."</td></tr>\n";
-			}
-			if (isset($configdmrgateway['DMR Network 4']['Enabled'])) {
-				if ($configdmrgateway['DMR Network 4']['Enabled'] == 1) {
-					echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$dmrMasterHost4."</td></tr>\n";
-				}
-			}
-			if (isset($configdmrgateway['DMR Network 5']['Enabled'])) {
-				if ($configdmrgateway['DMR Network 5']['Enabled'] == 1) {
-					echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$dmrMasterHost5."</td></tr>\n";
-				}
-			}
-			if (isset($configdmrgateway['DMR Network 6']['Enabled'])) {
-				if ($configdmrgateway['DMR Network 6']['Enabled'] == 1) {
-					echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$dmrMasterHost6."</td></tr>\n";
-				}
-			}
-		}
-		else {
-			echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$dmrMasterHost."</td></tr>\n";
-		}
-	}
-	else {
-		echo "<tr><td colspan=\"2\" style=\"background:#606060; color:#b0b0b0;\">No DMR Network</td></tr>\n";
-	}
+            if ($configdmrgateway['DMR Network 1']['Enabled'] == 1) {
+                echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$dmrMasterHost1."</td></tr>\n";
+            }
+            if ($configdmrgateway['DMR Network 2']['Enabled'] == 1) {
+                echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$dmrMasterHost2."</td></tr>\n";
+            }
+            if ($configdmrgateway['DMR Network 3']['Enabled'] == 1) {
+                echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$dmrMasterHost3."</td></tr>\n";
+            }
+            if (isset($configdmrgateway['DMR Network 4']['Enabled'])) {
+                if ($configdmrgateway['DMR Network 4']['Enabled'] == 1) {
+                    echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$dmrMasterHost4."</td></tr>\n";
+                }
+            }
+            if (isset($configdmrgateway['DMR Network 5']['Enabled'])) {
+                if ($configdmrgateway['DMR Network 5']['Enabled'] == 1) {
+                    echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$dmrMasterHost5."</td></tr>\n";
+                }
+            }
+            if (isset($configdmrgateway['DMR Network 6']['Enabled'])) {
+                if ($configdmrgateway['DMR Network 6']['Enabled'] == 1) {
+                    echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$dmrMasterHost6."</td></tr>\n";
+                }
+            }
+        }
+        else {
+            echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$dmrMasterHost."</td></tr>\n";
+        }
+    }
+    else {
+        echo "<tr><td colspan=\"2\" style=\"background:#606060; color:#b0b0b0;\">No DMR Network</td></tr>\n";
+    }
 echo "</table>\n";
 }
 
@@ -328,7 +358,7 @@ if ( $testYSF2DMR ) { //Hide the YSF2DMR information when YSF2DMR Network mode n
         while (!feof($dmrMasterFile)) {
                 $dmrMasterLine = fgets($dmrMasterFile);
                 $dmrMasterHostF = preg_split('/\s+/', $dmrMasterLine);
-		if ((count($dmrMasterHostF) >= 2) && (strpos($dmrMasterHostF[0], '#') === FALSE) && ($dmrMasterHostF[0] != '')) {
+        if ((count($dmrMasterHostF) >= 2) && (strpos($dmrMasterHostF[0], '#') === FALSE) && ($dmrMasterHostF[0] != '')) {
                         if ($dmrMasterHost == $dmrMasterHostF[2]) { $dmrMasterHost = str_replace('_', ' ', $dmrMasterHostF[0]); }
                 }
         }
@@ -338,8 +368,8 @@ if ( $testYSF2DMR ) { //Hide the YSF2DMR information when YSF2DMR Network mode n
         echo "<br />\n";
         echo "<table>\n";
         echo "<tr><th colspan=\"2\">YSF2DMR</th></tr>\n";
-	echo "<tr><th>DMR ID</th><td style=\"background: #ffffff;\">".$configysf2dmr['DMR Network']['Id']."</td></tr>\n";
-	echo "<tr><th colspan=\"2\">YSF2".$lang['dmr_master']."</th></tr>\n";
+    echo "<tr><th>DMR ID</th><td style=\"background: #ffffff;\">".$configysf2dmr['DMR Network']['Id']."</td></tr>\n";
+    echo "<tr><th colspan=\"2\">YSF2".$lang['dmr_master']."</th></tr>\n";
         echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">".$dmrMasterHost."</td></tr>\n";
         echo "</table>\n";
 }
@@ -347,71 +377,69 @@ if ( $testYSF2DMR ) { //Hide the YSF2DMR information when YSF2DMR Network mode n
 $testMMDVModeP25 = getConfigItem("P25 Network", "Enable", $mmdvmconfigs);
 if ( isset($configysf2p25['Enabled']['Enabled']) ) { $testYSF2P25 = $configysf2p25['Enabled']['Enabled']; }
 if ( $testMMDVModeP25 == 1 || $testYSF2P25 ) { //Hide the P25 information when P25 Network mode not enabled.
-	echo "<br />\n";
-	echo "<table>\n";
-	if (getConfigItem("P25", "NAC", $mmdvmconfigs)) {
-		echo "<tr><th colspan=\"2\">".$lang['p25_radio']."</th></tr>\n";
-		echo "<tr><th style=\"width:70px\">NAC</th><td>".getConfigItem("P25", "NAC", $mmdvmconfigs)."</td></tr>\n";
-	} else {
-		echo "<tr><th colspan=\"2\">".$lang['p25_radio']."</th></tr>\n";
-		echo "<tr><th style=\"width:70px\">NAC</th><td>0</td></tr>\n";
-	}
-	echo "<tr><th colspan=\"2\">".$lang['p25_net']."</th></tr>\n";
-	echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">".getActualLink($logLinesP25Gateway, "P25")."</td></tr>\n";
-	echo "</table>\n";
+    echo "<br />\n";
+    echo "<table>\n";
+    if (getConfigItem("P25", "NAC", $mmdvmconfigs)) {
+        echo "<tr><th colspan=\"2\">".$lang['p25_radio']."</th></tr>\n";
+        echo "<tr><th style=\"width:70px\">NAC</th><td>".getConfigItem("P25", "NAC", $mmdvmconfigs)."</td></tr>\n";
+    } else {
+        echo "<tr><th colspan=\"2\">".$lang['p25_radio']."</th></tr>\n";
+        echo "<tr><th style=\"width:70px\">NAC</th><td>0</td></tr>\n";
+    }
+    echo "<tr><th colspan=\"2\">".$lang['p25_net']."</th></tr>\n";
+    echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">".getActualLink($logLinesP25Gateway, "P25")."</td></tr>\n";
+    echo "</table>\n";
 }
 
 $testMMDVModeNXDN = getConfigItem("NXDN Network", "Enable", $mmdvmconfigs);
 if ( isset($configysf2nxdn['Enabled']['Enabled']) ) { if ($configysf2nxdn['Enabled']['Enabled'] == 1) { $testYSF2NXDN = 1; } }
 if ( isset($configdmr2nxdn['Enabled']['Enabled']) ) { if ($configdmr2nxdn['Enabled']['Enabled'] == 1) { $testDMR2NXDN = 1; } }
 if ( $testMMDVModeNXDN == 1 || isset($testYSF2NXDN) || isset($testDMR2NXDN) ) { //Hide the NXDN information when NXDN Network mode not enabled.
-	echo "<br />\n";
-	echo "<table>\n";
-	if (getConfigItem("NXDN", "RAN", $mmdvmconfigs)) {
-		echo "<tr><th colspan=\"2\">".$lang['nxdn_radio']."</th></tr>\n";
-		echo "<tr><th style=\"width:70px\">RAN</th><td>".getConfigItem("NXDN", "RAN", $mmdvmconfigs)."</td></tr>\n";
-	} else {
-		echo "<tr><th colspan=\"2\">".$lang['nxdn_radio']."</th></tr>\n";
-		echo "<tr><th style=\"width:70px\">RAN</th><td>0</td></tr>\n";
-	}
-	echo "<tr><th colspan=\"2\">".$lang['nxdn_net']."</th></tr>\n";
-	if (file_exists('/etc/nxdngateway')) {
-		echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">".getActualLink($logLinesNXDNGateway, "NXDN")."</td></tr>\n";
-	} else {
-		echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">TG 65000</td></tr>\n";
-	}
-	echo "</table>\n";
+    echo "<br />\n";
+    echo "<table>\n";
+    if (getConfigItem("NXDN", "RAN", $mmdvmconfigs)) {
+        echo "<tr><th colspan=\"2\">".$lang['nxdn_radio']."</th></tr>\n";
+        echo "<tr><th style=\"width:70px\">RAN</th><td>".getConfigItem("NXDN", "RAN", $mmdvmconfigs)."</td></tr>\n";
+    } else {
+        echo "<tr><th colspan=\"2\">".$lang['nxdn_radio']."</th></tr>\n";
+        echo "<tr><th style=\"width:70px\">RAN</th><td>0</td></tr>\n";
+    }
+    echo "<tr><th colspan=\"2\">".$lang['nxdn_net']."</th></tr>\n";
+    if (file_exists('/etc/nxdngateway')) {
+        echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">".getActualLink($logLinesNXDNGateway, "NXDN")."</td></tr>\n";
+    } else {
+        echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">TG 65000</td></tr>\n";
+    }
+    echo "</table>\n";
 }
 
 $testMMDVModeM17 = getConfigItem("M17 Network", "Enable", $mmdvmconfigs);
 if ( $testMMDVModeM17 == 1 ) { //Hide the M17 information when P25 Network mode not enabled.
-	echo "<br />\n";
-	echo "<table>\n";
-	if (getConfigItem("M17", "CAN", $mmdvmconfigs)) {
-		echo "<tr><th colspan=\"2\">".$lang['m17_radio']."</th></tr>\n";
-		echo "<tr><th style=\"width:70px\">CAN</th><td>".getConfigItem("M17", "CAN", $mmdvmconfigs)."</td></tr>\n";
-	} else {
-		echo "<tr><th colspan=\"2\">".$lang['m17_radio']."</th></tr>\n";
-		echo "<tr><th style=\"width:70px\">CAN</th><td>0</td></tr>\n";
-	}
-	echo "<tr><th colspan=\"2\">".$lang['m17_net']."</th></tr>\n";
-	echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">".getActualLink($logLinesM17Gateway, "M17")."</td></tr>\n";
-	echo "</table>\n";
+    echo "<br />\n";
+    echo "<table>\n";
+    if (getConfigItem("M17", "CAN", $mmdvmconfigs)) {
+        echo "<tr><th colspan=\"2\">".$lang['m17_radio']."</th></tr>\n";
+        echo "<tr><th style=\"width:70px\">CAN</th><td>".getConfigItem("M17", "CAN", $mmdvmconfigs)."</td></tr>\n";
+    } else {
+        echo "<tr><th colspan=\"2\">".$lang['m17_radio']."</th></tr>\n";
+        echo "<tr><th style=\"width:70px\">CAN</th><td>0</td></tr>\n";
+    }
+    echo "<tr><th colspan=\"2\">".$lang['m17_net']."</th></tr>\n";
+    echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">".getActualLink($logLinesM17Gateway, "M17")."</td></tr>\n";
+    echo "</table>\n";
 }
 
 $testMMDVModePOCSAG = getConfigItem("POCSAG Network", "Enable", $mmdvmconfigs);
 if ( $testMMDVModePOCSAG == 1 ) { //Hide the POCSAG information when POCSAG Network mode not enabled.
-	echo "<br />\n";
-	echo "<table>\n";
-	echo "<tr><th colspan=\"2\">POCSAG</th></tr>\n";
-	echo "<tr><th>Tx</th><td>".getMHZ(getConfigItem("POCSAG", "Frequency", $mmdvmconfigs))."</td></tr>\n";
-	if (isset($configdapnetgateway['DAPNET']['Address'])) {
-		$dapnetGatewayRemoteAddr = $configdapnetgateway['DAPNET']['Address'];
-		if (strlen($dapnetGatewayRemoteAddr) > 19) { $dapnetGatewayRemoteAddr = substr($dapnetGatewayRemoteAddr, 0, 17) . '..'; }
-		echo "<tr><th colspan=\"2\">POCSAG Master</th></tr>\n";
-		echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">".$dapnetGatewayRemoteAddr."</td></tr>\n";
-	}
-	echo "</table>\n";
+    echo "<br />\n";
+    echo "<table>\n";
+    echo "<tr><th colspan=\"2\">POCSAG</th></tr>\n";
+    echo "<tr><th>Tx</th><td>".getMHZ(getConfigItem("POCSAG", "Frequency", $mmdvmconfigs))."</td></tr>\n";
+    if (isset($configdapnetgateway['DAPNET']['Address'])) {
+        $dapnetGatewayRemoteAddr = $configdapnetgateway['DAPNET']['Address'];
+        if (strlen($dapnetGatewayRemoteAddr) > 19) { $dapnetGatewayRemoteAddr = substr($dapnetGatewayRemoteAddr, 0, 17) . '..'; }
+        echo "<tr><th colspan=\"2\">POCSAG Master</th></tr>\n";
+        echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">".$dapnetGatewayRemoteAddr."</td></tr>\n";
+    }
+    echo "</table>\n";
 }
-?>
-

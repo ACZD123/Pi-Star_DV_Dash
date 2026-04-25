@@ -1,6 +1,24 @@
 <?php
-// Most of the work here contributed by geeks4hire (Ben Horan)
-// Skyper decode by Andy Taylor (MW0MWZ)
+/**
+ * POCSAG / DAPNET pager-message partial.
+ *
+ * AJAX-loaded partial; refreshed every 5 seconds by /index.php — only
+ * when the POCSAG Network is enabled in /etc/mmdvmhost. Renders a
+ * small table of recent paging messages with optional Skyper decoding
+ * (the German weather-alert service that uses ROT-1 obfuscation, RIC
+ * pre-amble bytes, and rubric / message-number indexing).
+ *
+ * Skyper decode logic (in this file) translates Skyper RICs into a
+ * "[Skyper Rubric:N Msg:M] <decoded text>" preview where applicable.
+ *
+ * Data flow: parses the in-memory `$logLinesDAPNETGateway` array
+ * populated by mmdvmhost/functions.php from
+ * /var/log/pi-star/DAPNETGateway-YYYY-MM-DD.log.
+ *
+ * Most of the work here contributed by geeks4hire (Ben Horan); Skyper
+ * decode added by Andy Taylor (MW0MWZ).
+ */
+
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setEmbeddableSecurityHeaders();
 
@@ -10,7 +28,8 @@ include_once $_SERVER['DOCUMENT_ROOT'].'/mmdvmhost/functions.php';    // MMDVMDa
 include_once $_SERVER['DOCUMENT_ROOT'].'/config/language.php';        // Translation Code
 
 // Function to reverse the ROT1 used for Skyper
-function un_rot($message) {
+function un_rot($message)
+{
   $output = "";
   $messageTextArray = str_split($message);
 
@@ -27,7 +46,8 @@ function un_rot($message) {
 }
 
 // Function to handle Skyper Messages
-function skyper($message, $pocsagric) {
+function skyper($message, $pocsagric)
+{
   $output = "";
   $messageTextArray = str_split($message);
 
@@ -137,3 +157,4 @@ function skyper($message, $pocsagric) {
 ?>
 
 </table>
+

@@ -1,4 +1,28 @@
 <?php
+/**
+ * TGIF active-session panel.
+ *
+ * AJAX-loaded partial; refreshed every 180 seconds by /index.php (slow
+ * cadence — hits the TGIF API). Renders a read-only single-row table:
+ *   DMR Master | Repeater ID | Slot 1 TG | Slot 2 TG
+ *
+ * Inputs:
+ *   - /etc/dmrgateway       Used to find the local DMR ID and to detect
+ *                            which DMR Network slot is configured for
+ *                            TGIF (matched by name "TGIF*").
+ *   - http://tgif.network:5040/api/sessions   TGIF's plain-HTTP session
+ *                            list endpoint. The dashboard scans the JSON
+ *                            for a session whose repeater_id matches the
+ *                            local DMR ID, then surfaces tg0 (slot 1)
+ *                            and tg (slot 2). TG 4000 is treated as
+ *                            "None" / unlinked.
+ *
+ * Display-only. The companion tgif_manager.php provides the link form.
+ *
+ * NOTE for the security pass: API call is plain HTTP; no
+ * setEmbeddableSecurityHeaders() in this file.
+ */
+
 include_once $_SERVER['DOCUMENT_ROOT'].'/config/config.php';          // MMDVMDash Config
 include_once $_SERVER['DOCUMENT_ROOT'].'/mmdvmhost/tools.php';        // MMDVMDash Tools
 include_once $_SERVER['DOCUMENT_ROOT'].'/mmdvmhost/functions.php';    // MMDVMDash Functions
@@ -95,4 +119,3 @@ if ( $testMMDVModeDMR == 1 ) {
     }
   }
 }
-?>
