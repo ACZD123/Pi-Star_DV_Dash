@@ -102,6 +102,7 @@ function config_writer_allowed_paths()
         '/etc/timeserver',
         '/etc/aprsgateway',
         '/etc/mobilegps',
+        '/etc/starnetserver',
         '/etc/hostapd/hostapd.conf',
         '/root/.Remote Control',                            // note: literal space in filename
         '/var/www/dashboard/config/ircddblocal.php',
