@@ -978,8 +978,21 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
          $confRPT1 = str_pad(escapeshellcmd($_POST['confCallsign']), 7, " ").strtoupper(escapeshellcmd($_POST['confDStarModuleSuffix']));
          $confIRCrepeaterBand1 = strtoupper(escapeshellcmd($_POST['confDStarModuleSuffix']));
          $configmmdvm['D-Star']['Module'] = strtoupper(escapeshellcmd($_POST['confDStarModuleSuffix']));
-         $rollTimeserverBand = 'sudo sed -i "/send'.strtoupper(escapeshellcmd($_POST['confDStarModuleSuffix'])).'=/c\\send'.strtoupper(escapeshellcmd($_POST['confDStarModuleSuffix'])).'=1" /etc/timeserver';
-         system($rollTimeserverBand);
+         // Whitelist the module letter, then stage with a static key
+         // name. The previous `sudo sed -i "/send<X>=/c\send<X>=1"`
+         // pattern interpolated the letter into both the sed regex
+         // and the surrounding "..." shell context; escapeshellcmd
+         // doesn't protect a double-quoted shell context, so a single
+         // quote in $_POST broke out and ran arbitrary commands.
+         // Restricting $bandSuffix to a single A-Z letter makes the
+         // staged key (sendA / sendB / ...) trivially safe; the helper
+         // additionally validates keys against /^[A-Za-z_][A-Za-z0-9_]*$/.
+         $bandSuffix = strtoupper($_POST['confDStarModuleSuffix']);
+         if (preg_match('/\A[A-Z]\z/', $bandSuffix)) {
+             config_writer_stage_flat('/etc/timeserver', 'send' . $bandSuffix, '1');
+         } else {
+             error_log("configure.php: refusing confDStarModuleSuffix='$bandSuffix' (not a single A-Z letter)");
+         }
       }
 
       $newCallsignUpper = strtoupper(escapeshellcmd($_POST['confCallsign']));
@@ -1075,8 +1088,21 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
          $confRPT1 = str_pad(escapeshellcmd($_POST['confCallsign']), 7, " ").strtoupper(escapeshellcmd($_POST['confDStarModuleSuffix']));
          $confIRCrepeaterBand1 = strtoupper(escapeshellcmd($_POST['confDStarModuleSuffix']));
          $configmmdvm['D-Star']['Module'] = strtoupper(escapeshellcmd($_POST['confDStarModuleSuffix']));
-         $rollTimeserverBand = 'sudo sed -i "/send'.strtoupper(escapeshellcmd($_POST['confDStarModuleSuffix'])).'=/c\\send'.strtoupper(escapeshellcmd($_POST['confDStarModuleSuffix'])).'=1" /etc/timeserver';
-         system($rollTimeserverBand);
+         // Whitelist the module letter, then stage with a static key
+         // name. The previous `sudo sed -i "/send<X>=/c\send<X>=1"`
+         // pattern interpolated the letter into both the sed regex
+         // and the surrounding "..." shell context; escapeshellcmd
+         // doesn't protect a double-quoted shell context, so a single
+         // quote in $_POST broke out and ran arbitrary commands.
+         // Restricting $bandSuffix to a single A-Z letter makes the
+         // staged key (sendA / sendB / ...) trivially safe; the helper
+         // additionally validates keys against /^[A-Za-z_][A-Za-z0-9_]*$/.
+         $bandSuffix = strtoupper($_POST['confDStarModuleSuffix']);
+         if (preg_match('/\A[A-Z]\z/', $bandSuffix)) {
+             config_writer_stage_flat('/etc/timeserver', 'send' . $bandSuffix, '1');
+         } else {
+             error_log("configure.php: refusing confDStarModuleSuffix='$bandSuffix' (not a single A-Z letter)");
+         }
       }
 
       $newCallsignUpper = strtoupper(escapeshellcmd($_POST['confCallsign']));
