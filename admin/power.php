@@ -35,7 +35,10 @@ require_once('config/version.php');
 if ($_SERVER["PHP_SELF"] == "/admin/power.php") {
   // Sanity Check Passed.
   header('Cache-Control: no-cache');
-  session_start();
+  // session_start() is no longer called here — csrf_verify() at
+  // the top of the file already started the session via
+  // csrf_session_start(). A second session_start() would emit a
+  // "session is already active" NOTICE on PHP 8.x.
 ?>
   <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
