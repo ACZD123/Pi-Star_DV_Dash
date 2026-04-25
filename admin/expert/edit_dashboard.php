@@ -51,12 +51,23 @@ require_once('../config/version.php');
     <script type="text/javascript">
       function factoryReset()
       {
-      if (confirm('WARNING: This will set these settings back to factory defaults.\n\nAre you SURE you want to do this?\n\nPress OK to restore the factory configuration\nPress Cancel to go back.')) {
-        document.getElementById("factoryReset").submit();
-        } else {
-        return false;
+        // Typed confirmation. The server-side handler requires
+        // factoryResetConfirm === 'RESET' before performing the
+        // wipe — so a misclicked button or an accidental form
+        // replay does NOT reset the dashboard CSS, even though
+        // the CSRF token is otherwise valid.
+        var typed = prompt(
+            'WARNING: This will reset these settings to factory defaults.\n\n'
+          + 'Type RESET (uppercase) and press OK to proceed.\n'
+          + 'Press Cancel to go back.', '');
+        if (typed === null) { return false; }     // Cancel
+        if (typed !== 'RESET') {
+            alert('Confirmation text did not match. Factory reset cancelled.');
+            return false;
         }
-    }
+        document.getElementById('factoryResetConfirmInput').value = typed;
+        document.getElementById('factoryReset').submit();
+      }
     </script>
   </head>
   <body>
@@ -99,18 +110,35 @@ if($_POST) {
     $data = $_POST;
     // Factory Reset Handler Here
     if (empty($_POST['factoryReset']) != TRUE ) {
-        echo "<br />\n";
-        echo "<table>\n";
-        echo "<tr><th>Factory Reset Config</th></tr>\n";
-        echo "<tr><td>Loading fresh configuration file(s)...</td><tr>\n";
-        echo "</table>\n";
-        unset($_POST);
-        //Reset the config
-        exec('sudo mount -o remount,rw /');                             // Make rootfs writable
-        exec('sudo rm -rf /etc/pistar-css.ini');                        // Delete the Config
-        exec('sudo mount -o remount,ro /');                             // Make rootfs read-only
-        echo '<script type="text/javascript">setTimeout(function() { window.location=window.location;},0);</script>';
-        die();
+        // Server-side confirmation gate. The form ships a hidden
+        // factoryResetConfirm input that the JS factoryReset()
+        // populates only after the operator types `RESET` into
+        // the prompt. Comparing strictly to the magic string
+        // (===) means a misclicked button, a replayed POST, or
+        // a curl with just `factoryReset=1` does NOT trigger the
+        // wipe — even with a valid CSRF token.
+        $confirm = isset($_POST['factoryResetConfirm']) ? $_POST['factoryResetConfirm'] : '';
+        if ($confirm !== 'RESET') {
+            echo "<br />\n";
+            echo "<table>\n";
+            echo "<tr><th>Factory Reset NOT performed</th></tr>\n";
+            echo "<tr><td>Server-side confirmation did not match. Factory reset cancelled.</td><tr>\n";
+            echo "</table>\n";
+            unset($_POST);
+        } else {
+            echo "<br />\n";
+            echo "<table>\n";
+            echo "<tr><th>Factory Reset Config</th></tr>\n";
+            echo "<tr><td>Loading fresh configuration file(s)...</td><tr>\n";
+            echo "</table>\n";
+            unset($_POST);
+            //Reset the config
+            exec('sudo mount -o remount,rw /');                             // Make rootfs writable
+            exec('sudo rm -rf /etc/pistar-css.ini');                        // Delete the Config
+            exec('sudo mount -o remount,ro /');                             // Make rootfs read-only
+            echo '<script type="text/javascript">setTimeout(function() { window.location=window.location;},0);</script>';
+            die();
+        }
     } else {
         //update ini file, call function
         update_ini_file($data, $filepath);
@@ -205,6 +233,12 @@ echo 'if you took it all too far and now it makes you feel sick, click below to 
 echo '<form id="factoryReset" action="" method="post">'."\n";
 echo csrf_field_html()."\n";
 echo '  <div><input type="hidden" name="factoryReset" value="1" /></div>'."\n";
+// Server-side confirmation. JS factoryReset() prompts for the
+// magic word and only populates this input on a match. The
+// handler requires factoryResetConfirm === 'RESET' before doing
+// the wipe — closes the "valid CSRF token + accidental replay"
+// attack class.
+echo '  <div><input type="hidden" id="factoryResetConfirmInput" name="factoryResetConfirm" value="" /></div>'."\n";
 echo '</form>'."\n";
 echo '<input type="button" onclick="javascript:factoryReset();" value="'.$lang['factory_reset'].'" />'."\n";
 ?>
