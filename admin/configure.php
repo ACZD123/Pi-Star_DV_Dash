@@ -401,12 +401,77 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
       die();
       }
 
-    // AutoAP PSK Change
-    if (empty($_POST['autoapPsk']) != TRUE ) {
-      $rollAutoApPsk = 'sudo sed -i "/wpa_passphrase=/c\\wpa_passphrase='.$_POST['autoapPsk'].'" /etc/hostapd/hostapd.conf';
-      system($rollAutoApPsk);
-      $rollAutoApWPA = 'sudo sed -i "/wpa=/c\\wpa=2" /etc/hostapd/hostapd.conf';
-      system($rollAutoApWPA);
+    // AutoAP PSK Change.
+    //
+    // The previous implementation interpolated $_POST['autoapPsk'] raw
+    // into a `sudo sed -i "..."` shell pipeline — both the outer
+    // double-quoted shell context and the inner sed `c\` command were
+    // escapable. Now we validate the PSK against IEEE 802.11 rules
+    // BEFORE letting it anywhere near a shell, then write the new
+    // hostapd.conf via a tmp+install pattern instead of sed-i.
+    if (empty($_POST['autoapPsk']) != TRUE) {
+      $newPsk = $_POST['autoapPsk'];
+
+      // 802.11-i WPA-PSK passphrase: 8..63 printable ASCII chars, OR
+      // exactly 64 hex chars (a pre-hashed PMK). The whitelist also
+      // rejects newlines / control bytes / NUL — bytes that would
+      // confuse hostapd's own parser. Note: shell metachars like " ' \
+      // ; & $ ` ARE valid printable ASCII and pass the whitelist; the
+      // injection surface is closed not by blocking them but by the
+      // fact that the value below never reaches a shell context — it
+      // goes into a file as data via file_put_contents() + install.
+      if (preg_match('/\A([\x20-\x7e]{8,63}|[0-9A-Fa-f]{64})\z/', $newPsk)) {
+        $hostapdPath = '/etc/hostapd/hostapd.conf';
+
+        if (is_readable($hostapdPath)) {
+          $lines = file($hostapdPath, FILE_IGNORE_NEW_LINES);
+          if ($lines !== false) {
+            // Replace the FIRST line whose head matches `wpa_passphrase=`
+            // and the first whose head matches `wpa=`. Matches the old
+            // sed semantics (no-op silently if either key is absent —
+            // the dashboard relies on the keys already being present
+            // in /etc/hostapd/hostapd.conf, which is shipped by Pi-Star).
+            foreach ($lines as $i => $line) {
+              if (strpos($line, 'wpa_passphrase=') === 0) {
+                $lines[$i] = 'wpa_passphrase=' . $newPsk;
+                break;
+              }
+            }
+            foreach ($lines as $i => $line) {
+              if (strpos($line, 'wpa=') === 0) {
+                $lines[$i] = 'wpa=2';
+                break;
+              }
+            }
+
+            $tmp = tempnam('/tmp', 'pistar_hostapd_');
+            $bytes = file_put_contents($tmp, implode("\n", $lines) . "\n");
+            if ($bytes === false) {
+                // /tmp full or perm issue — bail before `install` copies
+                // a zero-byte or stale temp into /etc/hostapd/hostapd.conf
+                // and silently breaks the AP.
+                error_log("Pi-Star configure.php: failed to stage hostapd.conf to $tmp; AutoAP PSK not updated");
+                @unlink($tmp);
+            } else {
+                // Preserve the file's existing mode (644 root:root) — the
+                // dashboard runs as www-data and must be able to read
+                // this file again on subsequent POSTs. Locking to 600
+                // here would break the feature on second use. Hardening
+                // the mode (600 root:root, then dashboard reads the PSK
+                // via sudo) is a separate hardening exercise.
+                system('sudo install -m 644 -o root -g root ' . escapeshellarg($tmp) . ' ' . escapeshellarg($hostapdPath));
+                @unlink($tmp);
+            }
+          } else {
+            error_log("Pi-Star configure.php: cannot read $hostapdPath into lines; AutoAP PSK not updated");
+          }
+        } else {
+          error_log("Pi-Star configure.php: $hostapdPath not readable; AutoAP PSK not updated");
+        }
+      } else {
+        error_log("Pi-Star configure.php: AutoAP PSK rejected (must be 8-63 printable ASCII or 64-hex)");
+      }
+
       unset($_POST);
       echo "<table>\n";
       echo "<tr><th>Working...</th></tr>\n";
