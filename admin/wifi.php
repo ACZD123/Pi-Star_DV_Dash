@@ -332,31 +332,110 @@ echo '<br />
     echo '<script type="text/Javascript">UpdateNetworks()</script>';
 
     if(isset($_POST['SaveWPAPSKSettings'])) {
-        $config = "ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\nupdate_config=1\nap_scan=1\nfast_reauth=1\ncountry=".$_POST['wifiCountryCode']."\n\n";
-        $networks = $_POST['Networks'];
+        // Strict validation BEFORE we build the config string.
+        //
+        // Why: the previous implementation interpolated $_POST values
+        // (wifiCountryCode, ssid<N>, psk<N>) directly into the
+        // wpa_supplicant.conf template. None of those values were
+        // escaped for the surrounding `"..."` / `network={ ... }`
+        // shell-of-config context. An SSID containing `"\n}\n` would
+        // break out of the string, close the `network={` block, and
+        // let the attacker append additional `network={ ... }` /
+        // `ctrl_interface=...` directives — including a forced join
+        // to an attacker-controlled AP at next reboot, opening up
+        // DNS-rebind / MITM attacks on the rest of the LAN.
+        //
+        // Validation rules (per IEEE 802.11 + wpa_supplicant.conf
+        // syntactic safety):
+        //   - country: exactly 2 uppercase ASCII letters (ISO 3166-1)
+        //   - SSID:    1-32 bytes of printable ASCII, NO `"` and NO
+        //              `\` (those are the breakout chars inside the
+        //              `"..."` form). Special wildcard `*` allowed.
+        //   - PSK:     empty (open network) OR 8-63 printable ASCII
+        //              chars excluding `"` and `\` (the WPA passphrase
+        //              charset, narrowed to remove breakout chars) OR
+        //              exactly 64 hex chars (raw pre-shared key).
+        //
+        // The bin2hex(ssid) and hash_pbkdf2(psk, ssid) outputs that
+        // make it into the FINAL `ssid=` and `psk=` lines are hex
+        // strings by construction, so they were never the injection
+        // path. The injection path was the COMMENT lines
+        // (#ssid="..." / #psk="...") and the open-network
+        // `ssid="..."` line. Constraining the inputs here closes
+        // every variant.
+        $errors = array();
 
-        //Reworked WiFi Starts Here
-        for($x = 0; $x < $networks; $x++) {
-            //$network = '';
-            $ssid = $_POST['ssid'.$x];
-            $psk = $_POST['psk'.$x];
-            $priority = 100 - $x;
-            if ($ssid == "*" && !$psk) { $config .= "network={\n\t#ssid=\"$ssid\"\n\t#psk=\"\"\n\tkey_mgmt=NONE\n\tid_str=\"$x\"\n\tpriority=$priority\n\tscan_ssid=1\n}\n\n"; }
-            elseif ($ssid && !$psk) { $config .= "network={\n\tssid=\"$ssid\"\n\t#psk=\"\"\n\tkey_mgmt=NONE\n\tid_str=\"$x\"\n\tpriority=$priority\n\tscan_ssid=1\n}\n\n"; }
-            elseif ($ssid && $psk) {
-                $pskSalted = hash_pbkdf2("sha1",$psk, $ssid, 4096, 64);
-                $ssidHex = bin2hex("$ssid");
-                $config .= "network={\n\t#ssid=\"$ssid\"\n\tssid=$ssidHex\n\t#psk=\"$psk\"\n\tpsk=$pskSalted\n\tid_str=\"$x\"\n\tpriority=$priority\n\tscan_ssid=1\n}\n\n";
+        $rawCountry = isset($_POST['wifiCountryCode']) ? (string)$_POST['wifiCountryCode'] : '';
+        if (!preg_match('/\A[A-Z]{2}\z/', $rawCountry)) {
+            $errors[] = 'WiFi country code must be exactly 2 uppercase letters (ISO 3166-1 alpha-2)';
         }
+
+        $networksCount = isset($_POST['Networks']) ? (int)$_POST['Networks'] : 0;
+        if ($networksCount < 0 || $networksCount > 32) {
+            $errors[] = 'network count out of range';
+            // Clamp so the validation loop below doesn't spin on a
+            // hostile count. The non-empty $errors above will skip
+            // the config-build branch anyway, so behaviour is the
+            // same — this is defence in depth.
+            $networksCount = 0;
         }
-        file_put_contents('/tmp/wifidata', $config);
-        system('sudo mount -o remount,rw / && sudo cp -f /tmp/wifidata /etc/wpa_supplicant/wpa_supplicant.conf && sudo sync && sudo sync && sudo sync && sudo mount -o remount,ro /');
-        echo "Wifi Settings Updated Successfully\n";
-        // If Auto AP is on, dont restart the WiFi Card
-        if (!file_exists('/sys/class/net/wlan0_ap')) {
-            exec('sudo ip link set wlan0 down && sleep 3 && sudo ip link set wlan0 up');
+
+        // Per-network validation. SSID and PSK regexes use the
+        // explicit byte ranges \x20-\x21 + \x23-\x5b + \x5d-\x7e —
+        // i.e. printable ASCII minus `"` (0x22) and `\` (0x5c). Both
+        // are syntactic in the wpa_supplicant.conf `"..."` form;
+        // letting them through is what made the original injection
+        // possible.
+        $validated = array();
+        for ($x = 0; $x < $networksCount; $x++) {
+            $ssid = isset($_POST['ssid'.$x]) ? (string)$_POST['ssid'.$x] : '';
+            $psk  = isset($_POST['psk'.$x])  ? (string)$_POST['psk'.$x]  : '';
+
+            if ($ssid !== '*' &&
+                !preg_match('/\A[\x20-\x21\x23-\x5b\x5d-\x7e]{1,32}\z/', $ssid)) {
+                $errors[] = 'network ' . $x . ': SSID must be 1-32 printable ASCII characters and may not contain `"` or `\\`';
+            }
+
+            $pskOk = ($psk === '')
+                  || preg_match('/\A[0-9A-Fa-f]{64}\z/', $psk)
+                  || preg_match('/\A[\x20-\x21\x23-\x5b\x5d-\x7e]{8,63}\z/', $psk);
+            if (!$pskOk) {
+                $errors[] = 'network ' . $x . ': PSK must be 8-63 printable ASCII characters (no `"` or `\\`) or exactly 64 hex characters';
+            }
+
+            $validated[] = array('ssid' => $ssid, 'psk' => $psk);
         }
-        echo "<script>document.location='?page=\wlan0_info'</script>";
+
+        if (!empty($errors)) {
+            echo "<b>WiFi configuration NOT saved.</b><br />\n";
+            foreach ($errors as $err) {
+                echo "&nbsp;&nbsp;- " . htmlspecialchars($err, ENT_QUOTES, 'UTF-8') . "<br />\n";
+            }
+            echo "Please correct the input and try again.<br />\n";
+        } else {
+            $config = "ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\nupdate_config=1\nap_scan=1\nfast_reauth=1\ncountry=" . $rawCountry . "\n\n";
+
+            foreach ($validated as $x => $net) {
+                $ssid = $net['ssid'];
+                $psk = $net['psk'];
+                $priority = 100 - $x;
+                if ($ssid == "*" && !$psk) { $config .= "network={\n\t#ssid=\"$ssid\"\n\t#psk=\"\"\n\tkey_mgmt=NONE\n\tid_str=\"$x\"\n\tpriority=$priority\n\tscan_ssid=1\n}\n\n"; }
+                elseif ($ssid && !$psk) { $config .= "network={\n\tssid=\"$ssid\"\n\t#psk=\"\"\n\tkey_mgmt=NONE\n\tid_str=\"$x\"\n\tpriority=$priority\n\tscan_ssid=1\n}\n\n"; }
+                elseif ($ssid && $psk) {
+                    $pskSalted = hash_pbkdf2("sha1", $psk, $ssid, 4096, 64);
+                    $ssidHex = bin2hex("$ssid");
+                    $config .= "network={\n\t#ssid=\"$ssid\"\n\tssid=$ssidHex\n\t#psk=\"$psk\"\n\tpsk=$pskSalted\n\tid_str=\"$x\"\n\tpriority=$priority\n\tscan_ssid=1\n}\n\n";
+                }
+            }
+            file_put_contents('/tmp/wifidata', $config);
+            system('sudo mount -o remount,rw / && sudo cp -f /tmp/wifidata /etc/wpa_supplicant/wpa_supplicant.conf && sudo sync && sudo sync && sudo sync && sudo mount -o remount,ro /');
+            echo "Wifi Settings Updated Successfully\n";
+            // If Auto AP is on, don't restart the WiFi Card.
+            if (!file_exists('/sys/class/net/wlan0_ap')) {
+                exec('sudo ip link set wlan0 down && sleep 3 && sudo ip link set wlan0 up');
+            }
+            echo "<script>document.location='?page=\wlan0_info'</script>";
+        }
 
     } elseif(isset($_POST['Scan'])) {
         $return = '';
