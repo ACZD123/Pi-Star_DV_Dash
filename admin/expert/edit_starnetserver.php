@@ -5,11 +5,6 @@
  * Synthetic `[starnetserver]` section header trick on read like
  * edit_ircddbgateway.php / edit_dstarrepeater.php. Standard Pi-Star
  * copy-via-/tmp / mount-rw write pattern.
- *
- * NOTE: the systemctl restart line for starnetserver.service is
- * commented out in this file's deploy step — file edits are saved but
- * the daemon is NOT reloaded automatically. Known oddity, flagged for
- * a future cleanup pass.
  */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/csrf.php');
@@ -113,8 +108,10 @@ if($_POST) {
         exec('sudo chown root:root /etc/starnetserver');            // Set the owner
         exec('sudo mount -o remount,ro /');                    // Make rootfs read-only
 
-        // Reload the affected daemon
-        //exec('sudo systemctl restart starnetserver.service');        // Reload the daemon
+        // Reload the affected daemon so the saved edits take effect
+        // without a manual restart. Was commented out historically;
+        // restored so behaviour matches the other edit_*.php files.
+        exec('sudo systemctl restart starnetserver.service');            // Reload the daemon
         return $success;
     }
 
