@@ -19,6 +19,10 @@
  * decode added by Andy Taylor (MW0MWZ).
  */
 
+
+require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
+setSecurityHeaders();
+
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setEmbeddableSecurityHeaders();
 

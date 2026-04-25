@@ -22,6 +22,10 @@
  * config/security_headers.php helpers — flagged for the security pass.
  */
 
+
+require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
+setSecurityHeaders();
+
 include_once $_SERVER['DOCUMENT_ROOT'] . '/config/config.php';        // Dashboard runtime constants
 include_once $_SERVER['DOCUMENT_ROOT'] . '/mmdvmhost/tools.php';      // Helpers (format_time, isProcessRunning, ...)
 include_once $_SERVER['DOCUMENT_ROOT'] . '/mmdvmhost/functions.php';  // Populates $lastHeard

@@ -17,6 +17,10 @@
  * audit as a coverage gap.
  */
 
+
+require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
+setSecurityHeaders();
+
 include_once $_SERVER['DOCUMENT_ROOT'].'/config/ircddblocal.php';
 $configs = array();
 

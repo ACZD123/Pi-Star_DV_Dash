@@ -20,6 +20,10 @@
  * Data flow: relies on `$lastHeard` populated by mmdvmhost/functions.php.
  */
 
+
+require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
+setSecurityHeaders();
+
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setEmbeddableSecurityHeaders();
 

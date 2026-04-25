@@ -27,6 +27,10 @@
  * /var/pistar-keeper/pistar-keeper.log + a download link).
  */
 
+
+require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
+setSecurityHeaders();
+
 if ($_SERVER["PHP_SELF"] == "/admin/index.php") {
 include_once $_SERVER['DOCUMENT_ROOT'].'/config/language.php';          // Translation Code
 

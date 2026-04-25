@@ -11,6 +11,10 @@
  * NOTE for the security pass: no setSecurityHeaders() call (binary
  * download), and no auth check beyond the PHP_SELF guard.
  */
+
+require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
+setSecurityHeaders();
+
 if ($_SERVER["PHP_SELF"] == "/admin/download_modem_log.php") {
     if (file_exists('/etc/dstar-radio.mmdvmhost')) {
         $logfile = "/var/log/pi-star/MMDVM-".gmdate('Y-m-d').".log";

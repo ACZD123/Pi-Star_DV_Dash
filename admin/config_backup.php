@@ -28,6 +28,10 @@
  * No setSecurityHeaders() call here either. All flagged for the
  * security pass; no fixes in this commit.
  */
+
+require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
+setSecurityHeaders();
+
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/csrf.php');
 
 // CSRF protection — see config/csrf.php for the full rationale.

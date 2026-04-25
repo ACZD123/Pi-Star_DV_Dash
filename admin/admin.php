@@ -19,6 +19,10 @@
  * NOTE for the security pass: this file does not call
  * setEmbeddableSecurityHeaders(). Coverage gap.
  */
+
+require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
+setSecurityHeaders();
+
 ?>
 <b>Service Status</b>
 <table>

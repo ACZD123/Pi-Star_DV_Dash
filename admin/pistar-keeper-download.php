@@ -10,6 +10,10 @@
  * check, no PHP_SELF guard. Coverage gap.
  */
 
+
+require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
+setSecurityHeaders();
+
 $file = '/var/pistar-keeper/pistar-keeper.log';
 
 if (file_exists($file)) {

@@ -15,6 +15,10 @@
  * those examples verbatim if log format ever drifts.
  */
 
+
+require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
+setSecurityHeaders();
+
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setEmbeddableSecurityHeaders();
 
