@@ -93,7 +93,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/config_backup.php") {
 <?php if (!empty($_POST)) {
   echo '<table width="100%">'."\n";
 
-        if ( escapeshellcmd($_POST["action"]) == "download" ) {
+        if ( $_POST["action"] === "download" ) {
           echo "<tr><th colspan=\"2\">".$lang['backup_restore']."</th></tr>\n";
 
           $output = "Finding config files to be backed up\n";
@@ -165,7 +165,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/config_backup.php") {
           }
 
         };
-        if ( escapeshellcmd($_POST["action"]) == "restore" ) {
+        if ( $_POST["action"] === "restore" ) {
           echo "<tr><th colspan=\"2\">Config Restore</th></tr>\n";
           $output = "Uploading your Config data\n";
 

@@ -80,7 +80,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/power.php") {
   <table width="100%">
   <tr><th colspan="2"><?php echo $lang['power'];?></th></tr>
   <?php
-        if ( escapeshellcmd($_POST["action"]) == "reboot" ) {
+        if ( $_POST["action"] === "reboot" ) {
                 echo '<tr><td colspan="2" style="background: #000000; color: #00ff00;"><br /><br />Reboot command has been sent to your Pi,
                         <br />please wait up to 90 secs for it to reboot.<br />
                         <br />You will be re-directed back to the
@@ -101,7 +101,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/power.php") {
                 system('sudo sync && sudo sync && sudo sync && sudo mount -o remount,ro / > /dev/null &');
                 exec('sudo reboot > /dev/null &');
                 };
-        if ( escapeshellcmd($_POST["action"]) == "shutdown" ) {
+        if ( $_POST["action"] === "shutdown" ) {
                 echo '<tr><td colspan="2" style="background: #000000; color: #00ff00;"><br /><br />Shutdown command has been sent to your Pi,
                         <br /> please wait 30 secs for it to fully shutdown<br />before removing the power.<br /><br /><br /></td></tr>';
                 system('sudo sync && sudo sync && sudo sync && sudo mount -o remount,ro / > /dev/null &');

@@ -687,14 +687,14 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
     // Change Radio Control Software
     if (empty($_POST['controllerSoft']) != TRUE ) {
       system('sudo rm -rf /etc/dstar-radio.*');
-      if (escapeshellcmd($_POST['controllerSoft']) == 'DSTAR') { system('sudo touch /etc/dstar-radio.dstarrepeater'); }
-      if (escapeshellcmd($_POST['controllerSoft']) == 'MMDVM') { system('sudo touch /etc/dstar-radio.mmdvmhost'); }
+      if ($_POST['controllerSoft'] === 'DSTAR') { system('sudo touch /etc/dstar-radio.dstarrepeater'); }
+      if ($_POST['controllerSoft'] === 'MMDVM') { system('sudo touch /etc/dstar-radio.mmdvmhost'); }
       }
 
     // HostAP
     if (empty($_POST['autoAP']) != TRUE ) {
-      if (escapeshellcmd($_POST['autoAP']) == 'OFF') { system('sudo touch /etc/hostap.off'); }
-      if (escapeshellcmd($_POST['autoAP']) == 'ON') { system('sudo rm -rf /etc/hostap.off'); }
+      if ($_POST['autoAP'] === 'OFF') { system('sudo touch /etc/hostap.off'); }
+      if ($_POST['autoAP'] === 'ON') { system('sudo rm -rf /etc/hostap.off'); }
       }
 
     // Change Dashboard Language.
@@ -765,10 +765,10 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
 
     // Set the ircDDBGAteway Defaut Reflector Autostart
     if (empty($_POST['confDefRefAuto']) != TRUE ) {
-      if (escapeshellcmd($_POST['confDefRefAuto']) == 'ON') {
+      if ($_POST['confDefRefAuto'] === 'ON') {
         config_writer_stage_flat('/etc/ircddbgateway', 'atStartup1', '1');
       }
-      if (escapeshellcmd($_POST['confDefRefAuto']) == 'OFF') {
+      if ($_POST['confDefRefAuto'] === 'OFF') {
         config_writer_stage_flat('/etc/ircddbgateway', 'atStartup1', '0');
       }
       }
@@ -1238,10 +1238,10 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
     // `/^ircddbEnabled=/` (and the hostname equivalent) makes the intent
     // explicit and forecloses that class of regression.
     if (empty($_POST['confircddbEnabled']) != TRUE) {
-        if (escapeshellcmd($_POST['confircddbEnabled']) == 'ON') {
+        if ($_POST['confircddbEnabled'] === 'ON') {
             config_writer_stage_flat('/etc/ircddbgateway', 'ircddbEnabled', '1');
         }
-        if (escapeshellcmd($_POST['confircddbEnabled']) == 'OFF') {
+        if ($_POST['confircddbEnabled'] === 'OFF') {
             config_writer_stage_flat('/etc/ircddbgateway', 'ircddbEnabled', '0');
         }
         if (isset($configs['ircddbHostname']) && $configs['ircddbHostname'] == "rr.openquad.net") {
@@ -1355,14 +1355,14 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
 
     // Set YSFGateway to automatically pass through WiresX
     if (empty($_POST['wiresXCommandPassthrough']) != TRUE ) {
-      if (escapeshellcmd($_POST['wiresXCommandPassthrough']) == 'ON' )  { $configysfgateway['General']['WiresXCommandPassthrough'] = "1"; }
-      if (escapeshellcmd($_POST['wiresXCommandPassthrough']) == 'OFF' ) { $configysfgateway['General']['WiresXCommandPassthrough'] = "0"; }
+      if ($_POST['wiresXCommandPassthrough'] === 'ON' )  { $configysfgateway['General']['WiresXCommandPassthrough'] = "1"; }
+      if ($_POST['wiresXCommandPassthrough'] === 'OFF' ) { $configysfgateway['General']['WiresXCommandPassthrough'] = "0"; }
     }
 
     // Remove hostfiles.ysfupper and use the new YSFGateway Feature
     if (empty($_POST['confHostFilesYSFUpper']) != TRUE ) {
-        if (escapeshellcmd($_POST['confHostFilesYSFUpper']) == 'ON' )   { $configysfgateway['General']['WiresXMakeUpper'] = "1"; }
-        if (escapeshellcmd($_POST['confHostFilesYSFUpper']) == 'OFF' )  { $configysfgateway['General']['WiresXMakeUpper'] = "0"; }
+        if ($_POST['confHostFilesYSFUpper'] === 'ON' )   { $configysfgateway['General']['WiresXMakeUpper'] = "1"; }
+        if ($_POST['confHostFilesYSFUpper'] === 'OFF' )  { $configysfgateway['General']['WiresXMakeUpper'] = "0"; }
         if (file_exists('/etc/hostfiles.ysfupper')) { system('sudo rm -rf /etc/hostfiles.ysfupper'); }
     }
 
@@ -1397,7 +1397,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
     if (empty($_POST['ysf2nxdnStartupDstId']) != TRUE ) {
       $configysf2nxdn['NXDN Network']['StartupDstId'] = escapeshellcmd($_POST['ysf2nxdnStartupDstId']);
       if (file_exists('/etc/nxdngateway')) {
-        if (escapeshellcmd($_POST['ysf2nxdnStartupDstId']) === "none") {
+        if ($_POST['ysf2nxdnStartupDstId'] === "none") {
           unset($confignxdngateway['Network']['Startup']);
           unset($confignxdngateway['Network']['Static']);
         } else {
@@ -1664,39 +1664,39 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
 
     // Set JutterBuffer Option
     //if (empty($_POST['dmrDMRnetJitterBufer']) != TRUE ) {
-    //  if (escapeshellcmd($_POST['dmrDMRnetJitterBufer']) == 'ON' ) { $configmmdvm['DMR Network']['JitterEnabled'] = "1"; $configysf2dmr['DMR Network']['JitterEnabled'] = "1"; }
-    //  if (escapeshellcmd($_POST['dmrDMRnetJitterBufer']) == 'OFF' ) { $configmmdvm['DMR Network']['JitterEnabled'] = "0"; $configysf2dmr['DMR Network']['JitterEnabled'] = "0"; }
+    //  if ($_POST['dmrDMRnetJitterBufer'] === 'ON' ) { $configmmdvm['DMR Network']['JitterEnabled'] = "1"; $configysf2dmr['DMR Network']['JitterEnabled'] = "1"; }
+    //  if ($_POST['dmrDMRnetJitterBufer'] === 'OFF' ) { $configmmdvm['DMR Network']['JitterEnabled'] = "0"; $configysf2dmr['DMR Network']['JitterEnabled'] = "0"; }
     //}
     unset($configmmdvm['DMR Network']['JitterEnabled']);
 
     // Set Talker Alias Option
     if (empty($_POST['dmrEmbeddedLCOnly']) != TRUE ) {
-      if (escapeshellcmd($_POST['dmrEmbeddedLCOnly']) == 'ON' ) { $configmmdvm['DMR']['EmbeddedLCOnly'] = "1"; }
-      if (escapeshellcmd($_POST['dmrEmbeddedLCOnly']) == 'OFF' ) { $configmmdvm['DMR']['EmbeddedLCOnly'] = "0"; }
+      if ($_POST['dmrEmbeddedLCOnly'] === 'ON' ) { $configmmdvm['DMR']['EmbeddedLCOnly'] = "1"; }
+      if ($_POST['dmrEmbeddedLCOnly'] === 'OFF' ) { $configmmdvm['DMR']['EmbeddedLCOnly'] = "0"; }
     }
 
     // Set Dump TA Data Option for GPS support
     if (empty($_POST['dmrDumpTAData']) != TRUE ) {
-      if (escapeshellcmd($_POST['dmrDumpTAData']) == 'ON' ) { $configmmdvm['DMR']['DumpTAData'] = "1"; }
-      if (escapeshellcmd($_POST['dmrDumpTAData']) == 'OFF' ) { $configmmdvm['DMR']['DumpTAData'] = "0"; }
+      if ($_POST['dmrDumpTAData'] === 'ON' ) { $configmmdvm['DMR']['DumpTAData'] = "1"; }
+      if ($_POST['dmrDumpTAData'] === 'OFF' ) { $configmmdvm['DMR']['DumpTAData'] = "0"; }
     }
 
     // Set the XLX DMRGateway Master On or Off
     if (empty($_POST['dmrGatewayXlxEn']) != TRUE ) {
-      if (escapeshellcmd($_POST['dmrGatewayXlxEn']) == 'ON' ) { $configdmrgateway['XLX Network 1']['Enabled'] = "1"; $configdmrgateway['XLX Network']['Enabled'] = "1"; }
-      if (escapeshellcmd($_POST['dmrGatewayXlxEn']) == 'OFF' ) { $configdmrgateway['XLX Network 1']['Enabled'] = "0"; $configdmrgateway['XLX Network']['Enabled'] = "0"; }
+      if ($_POST['dmrGatewayXlxEn'] === 'ON' ) { $configdmrgateway['XLX Network 1']['Enabled'] = "1"; $configdmrgateway['XLX Network']['Enabled'] = "1"; }
+      if ($_POST['dmrGatewayXlxEn'] === 'OFF' ) { $configdmrgateway['XLX Network 1']['Enabled'] = "0"; $configdmrgateway['XLX Network']['Enabled'] = "0"; }
     }
 
     // Set the DMRGateway Network 2 On or Off
     if (empty($_POST['dmrGatewayNet2En']) != TRUE ) {
-      if (escapeshellcmd($_POST['dmrGatewayNet2En']) == 'ON' ) { $configdmrgateway['DMR Network 2']['Enabled'] = "1"; }
-      if (escapeshellcmd($_POST['dmrGatewayNet2En']) == 'OFF' ) { $configdmrgateway['DMR Network 2']['Enabled'] = "0"; }
+      if ($_POST['dmrGatewayNet2En'] === 'ON' ) { $configdmrgateway['DMR Network 2']['Enabled'] = "1"; }
+      if ($_POST['dmrGatewayNet2En'] === 'OFF' ) { $configdmrgateway['DMR Network 2']['Enabled'] = "0"; }
     }
 
     // Set the DMRGateway Network 1 On or Off
     if (empty($_POST['dmrGatewayNet1En']) != TRUE ) {
-      if (escapeshellcmd($_POST['dmrGatewayNet1En']) == 'ON' ) { $configdmrgateway['DMR Network 1']['Enabled'] = "1"; }
-      if (escapeshellcmd($_POST['dmrGatewayNet1En']) == 'OFF' ) { $configdmrgateway['DMR Network 1']['Enabled'] = "0"; }
+      if ($_POST['dmrGatewayNet1En'] === 'ON' ) { $configdmrgateway['DMR Network 1']['Enabled'] = "1"; }
+      if ($_POST['dmrGatewayNet1En'] === 'OFF' ) { $configdmrgateway['DMR Network 1']['Enabled'] = "0"; }
     }
 
     // Remove old settings
@@ -2401,8 +2401,8 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
       $publicDashboard = 'sudo sed -i \'/$ipVar 80 80/c\\\t\t$DAEMON -u ${igdURL} -e ${hostVar}_Dash -a $ipVar 80 80 TCP > /dev/null 2>&1\' /usr/local/sbin/pistar-upnp.service';
       $privateDashboard = 'sudo sed -i \'/$ipVar 80 80/ s/^#*/#/\' /usr/local/sbin/pistar-upnp.service';
 
-      if (escapeshellcmd($_POST['dashAccess']) == 'PUB' ) { system($publicDashboard); }
-      if (escapeshellcmd($_POST['dashAccess']) == 'PRV' ) { system($privateDashboard); }
+      if ($_POST['dashAccess'] === 'PUB' ) { system($publicDashboard); }
+      if ($_POST['dashAccess'] === 'PRV' ) { system($privateDashboard); }
     }
 
     // Set the ircDDBGateway Remote Public
@@ -2410,8 +2410,8 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
       $publicRCirc = 'sudo sed -i \'/$ipVar 10022 10022/c\\\t\t\t$DAEMON -u ${igdURL} -e ${hostVar}_Remote -a $ipVar 10022 10022 UDP > /dev/null 2>&1\' /usr/local/sbin/pistar-upnp.service';
       $privateRCirc = 'sudo sed -i \'/$ipVar 10022 10022/ s/^#*/#/\' /usr/local/sbin/pistar-upnp.service';
 
-      if (escapeshellcmd($_POST['ircRCAccess']) == 'PUB' ) { system($publicRCirc); }
-      if (escapeshellcmd($_POST['ircRCAccess']) == 'PRV' ) { system($privateRCirc); }
+      if ($_POST['ircRCAccess'] === 'PUB' ) { system($publicRCirc); }
+      if ($_POST['ircRCAccess'] === 'PRV' ) { system($privateRCirc); }
     }
 
     // Set SSH Access Public
@@ -2419,8 +2419,8 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
       $publicSSH = 'sudo sed -i \'/$ipVar 22 22/c\\\t\t$DAEMON -u ${igdURL} -e ${hostVar}_SSH -a $ipVar 22 22 TCP > /dev/null 2>&1\' /usr/local/sbin/pistar-upnp.service';
       $privateSSH = 'sudo sed -i \'/$ipVar 22 22/ s/^#*/#/\' /usr/local/sbin/pistar-upnp.service';
 
-      if (escapeshellcmd($_POST['sshAccess']) == 'PUB' ) { system($publicSSH); }
-      if (escapeshellcmd($_POST['sshAccess']) == 'PRV' ) { system($privateSSH); }
+      if ($_POST['sshAccess'] === 'PUB' ) { system($publicSSH); }
+      if ($_POST['sshAccess'] === 'PRV' ) { system($privateSSH); }
     }
 
     // Set uPNP On or Off
@@ -2432,74 +2432,74 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
       $uPNPsvcStart = '(sudo systemctl stop pistar-upnp.service && sudo systemctl start pistar-upnp.service) > /dev/null 2>&1 &';
       $uPNPsvcStop = '(sudo systemctl stop pistar-upnp.service) > /dev/null 2>&1 &';
 
-      if (escapeshellcmd($_POST['uPNP']) == 'ON' )  { system($uPNPon); system($uPNPsvcOn); system($uPNPsvcStart); }
-      if (escapeshellcmd($_POST['uPNP']) == 'OFF' ) { system($uPNPoff); system($uPNPsvcStop); system($uPNPsvcOff); }
+      if ($_POST['uPNP'] === 'ON' )  { system($uPNPon); system($uPNPsvcOn); system($uPNPsvcStart); }
+      if ($_POST['uPNP'] === 'OFF' ) { system($uPNPoff); system($uPNPsvcStop); system($uPNPsvcOff); }
     }
 
     // D-Star Time Announce
     if (empty($_POST['confTimeAnnounce']) != TRUE ) {
-      if (escapeshellcmd($_POST['confTimeAnnounce']) == 'ON' )  { system('sudo rm -rf /etc/timeserver.dissable'); }
-      if (escapeshellcmd($_POST['confTimeAnnounce']) == 'OFF' )  { system('sudo touch /etc/timeserver.dissable'); }
+      if ($_POST['confTimeAnnounce'] === 'ON' )  { system('sudo rm -rf /etc/timeserver.dissable'); }
+      if ($_POST['confTimeAnnounce'] === 'OFF' )  { system('sudo touch /etc/timeserver.dissable'); }
     }
 
     // Set MMDVMHost DMR Mode
     if (empty($_POST['MMDVMModeDMR']) != TRUE ) {
-      if (escapeshellcmd($_POST['MMDVMModeDMR']) == 'ON' )  { $configmmdvm['DMR']['Enable'] = "1"; $configmmdvm['DMR Network']['Enable'] = "1"; $configysf2dmr['Enabled']['Enabled'] = "0";}
-      if (escapeshellcmd($_POST['MMDVMModeDMR']) == 'OFF' ) { $configmmdvm['DMR']['Enable'] = "0"; $configmmdvm['DMR Network']['Enable'] = "0"; }
+      if ($_POST['MMDVMModeDMR'] === 'ON' )  { $configmmdvm['DMR']['Enable'] = "1"; $configmmdvm['DMR Network']['Enable'] = "1"; $configysf2dmr['Enabled']['Enabled'] = "0";}
+      if ($_POST['MMDVMModeDMR'] === 'OFF' ) { $configmmdvm['DMR']['Enable'] = "0"; $configmmdvm['DMR Network']['Enable'] = "0"; }
     }
 
     // Set MMDVMHost D-Star Mode
     if (empty($_POST['MMDVMModeDSTAR']) != TRUE ) {
-          if (escapeshellcmd($_POST['MMDVMModeDSTAR']) == 'ON' )  { $configmmdvm['D-Star']['Enable'] = "1"; $configmmdvm['D-Star Network']['Enable'] = "1"; }
-          if (escapeshellcmd($_POST['MMDVMModeDSTAR']) == 'OFF' ) { $configmmdvm['D-Star']['Enable'] = "0"; $configmmdvm['D-Star Network']['Enable'] = "0"; }
+          if ($_POST['MMDVMModeDSTAR'] === 'ON' )  { $configmmdvm['D-Star']['Enable'] = "1"; $configmmdvm['D-Star Network']['Enable'] = "1"; }
+          if ($_POST['MMDVMModeDSTAR'] === 'OFF' ) { $configmmdvm['D-Star']['Enable'] = "0"; $configmmdvm['D-Star Network']['Enable'] = "0"; }
     }
 
     // Set MMDVMHost Fusion Mode
     if (empty($_POST['MMDVMModeFUSION']) != TRUE ) {
-          if (escapeshellcmd($_POST['MMDVMModeFUSION']) == 'ON' )  { $configmmdvm['System Fusion']['Enable'] = "1"; $configmmdvm['System Fusion Network']['Enable'] = "1"; $configdmr2ysf['Enabled']['Enabled'] = "0"; }
-          if (escapeshellcmd($_POST['MMDVMModeFUSION']) == 'OFF' ) { $configmmdvm['System Fusion']['Enable'] = "0"; $configmmdvm['System Fusion Network']['Enable'] = "0"; }
+          if ($_POST['MMDVMModeFUSION'] === 'ON' )  { $configmmdvm['System Fusion']['Enable'] = "1"; $configmmdvm['System Fusion Network']['Enable'] = "1"; $configdmr2ysf['Enabled']['Enabled'] = "0"; }
+          if ($_POST['MMDVMModeFUSION'] === 'OFF' ) { $configmmdvm['System Fusion']['Enable'] = "0"; $configmmdvm['System Fusion Network']['Enable'] = "0"; }
     }
 
     // Set MMDVMHost P25 Mode
     if (empty($_POST['MMDVMModeP25']) != TRUE ) {
-          if (escapeshellcmd($_POST['MMDVMModeP25']) == 'ON' )  { $configmmdvm['P25']['Enable'] = "1"; $configmmdvm['P25 Network']['Enable'] = "1"; $configysf2p25['Enabled']['Enabled'] = "0"; }
-          if (escapeshellcmd($_POST['MMDVMModeP25']) == 'OFF' ) { $configmmdvm['P25']['Enable'] = "0"; $configmmdvm['P25 Network']['Enable'] = "0"; }
+          if ($_POST['MMDVMModeP25'] === 'ON' )  { $configmmdvm['P25']['Enable'] = "1"; $configmmdvm['P25 Network']['Enable'] = "1"; $configysf2p25['Enabled']['Enabled'] = "0"; }
+          if ($_POST['MMDVMModeP25'] === 'OFF' ) { $configmmdvm['P25']['Enable'] = "0"; $configmmdvm['P25 Network']['Enable'] = "0"; }
     }
 
     // Set MMDVMHost NXDN Mode
     if (empty($_POST['MMDVMModeNXDN']) != TRUE ) {
-          if (escapeshellcmd($_POST['MMDVMModeNXDN']) == 'ON' )  { $configmmdvm['NXDN']['Enable'] = "1"; $configmmdvm['NXDN Network']['Enable'] = "1"; $configysf2nxdn['Enabled']['Enabled'] = "0"; }
-          if (escapeshellcmd($_POST['MMDVMModeNXDN']) == 'OFF' ) { $configmmdvm['NXDN']['Enable'] = "0"; $configmmdvm['NXDN Network']['Enable'] = "0"; }
+          if ($_POST['MMDVMModeNXDN'] === 'ON' )  { $configmmdvm['NXDN']['Enable'] = "1"; $configmmdvm['NXDN Network']['Enable'] = "1"; $configysf2nxdn['Enabled']['Enabled'] = "0"; }
+          if ($_POST['MMDVMModeNXDN'] === 'OFF' ) { $configmmdvm['NXDN']['Enable'] = "0"; $configmmdvm['NXDN Network']['Enable'] = "0"; }
     }
 
     // Set MMDVMHost M17 Mode
     if (empty($_POST['MMDVMModeM17']) != TRUE ) {
-          if (escapeshellcmd($_POST['MMDVMModeM17']) == 'ON' )  { $configmmdvm['M17']['Enable'] = "1"; $configmmdvm['M17 Network']['Enable'] = "1"; }
-          if (escapeshellcmd($_POST['MMDVMModeM17']) == 'OFF' ) { $configmmdvm['M17']['Enable'] = "0"; $configmmdvm['M17 Network']['Enable'] = "0"; }
+          if ($_POST['MMDVMModeM17'] === 'ON' )  { $configmmdvm['M17']['Enable'] = "1"; $configmmdvm['M17 Network']['Enable'] = "1"; }
+          if ($_POST['MMDVMModeM17'] === 'OFF' ) { $configmmdvm['M17']['Enable'] = "0"; $configmmdvm['M17 Network']['Enable'] = "0"; }
     }
 
     // Set YSF2DMR Mode
     if (empty($_POST['MMDVMModeYSF2DMR']) != TRUE ) {
-          if (escapeshellcmd($_POST['MMDVMModeYSF2DMR']) == 'ON' )  { $configysf2dmr['Enabled']['Enabled'] = "1"; }
-          if (escapeshellcmd($_POST['MMDVMModeYSF2DMR']) == 'OFF' ) { $configysf2dmr['Enabled']['Enabled'] = "0"; }
+          if ($_POST['MMDVMModeYSF2DMR'] === 'ON' )  { $configysf2dmr['Enabled']['Enabled'] = "1"; }
+          if ($_POST['MMDVMModeYSF2DMR'] === 'OFF' ) { $configysf2dmr['Enabled']['Enabled'] = "0"; }
     }
 
     // Set YSF2NXDN Mode
     if (empty($_POST['MMDVMModeYSF2NXDN']) != TRUE ) {
-          if (escapeshellcmd($_POST['MMDVMModeYSF2NXDN']) == 'ON' )  { $configysf2nxdn['Enabled']['Enabled'] = "1"; $configmmdvm['NXDN']['Enable'] = "0"; $configmmdvm['NXDN Network']['Enable'] = "0";}
-          if (escapeshellcmd($_POST['MMDVMModeYSF2NXDN']) == 'OFF' ) { $configysf2nxdn['Enabled']['Enabled'] = "0"; }
+          if ($_POST['MMDVMModeYSF2NXDN'] === 'ON' )  { $configysf2nxdn['Enabled']['Enabled'] = "1"; $configmmdvm['NXDN']['Enable'] = "0"; $configmmdvm['NXDN Network']['Enable'] = "0";}
+          if ($_POST['MMDVMModeYSF2NXDN'] === 'OFF' ) { $configysf2nxdn['Enabled']['Enabled'] = "0"; }
     }
 
     // Set YSF2P25 Mode
     if (empty($_POST['MMDVMModeYSF2P25']) != TRUE ) {
-          if (escapeshellcmd($_POST['MMDVMModeYSF2P25']) == 'ON' )  { $configysf2p25['Enabled']['Enabled'] = "1"; $configmmdvm['P25']['Enable'] = "0"; $configmmdvm['P25 Network']['Enable'] = "0"; }
-          if (escapeshellcmd($_POST['MMDVMModeYSF2P25']) == 'OFF' ) { $configysf2p25['Enabled']['Enabled'] = "0"; }
-      if (escapeshellcmd($_POST['MMDVMModeFUSION']) == 'OFF' ) { $configysf2p25['Enabled']['Enabled'] = "0"; }
+          if ($_POST['MMDVMModeYSF2P25'] === 'ON' )  { $configysf2p25['Enabled']['Enabled'] = "1"; $configmmdvm['P25']['Enable'] = "0"; $configmmdvm['P25 Network']['Enable'] = "0"; }
+          if ($_POST['MMDVMModeYSF2P25'] === 'OFF' ) { $configysf2p25['Enabled']['Enabled'] = "0"; }
+      if ($_POST['MMDVMModeFUSION'] === 'OFF' ) { $configysf2p25['Enabled']['Enabled'] = "0"; }
     }
 
     // Set DMR2YSF Mode
     if (empty($_POST['MMDVMModeDMR2YSF']) != TRUE ) {
-          if (escapeshellcmd($_POST['MMDVMModeDMR2YSF']) == 'ON' )  {
+          if ($_POST['MMDVMModeDMR2YSF'] === 'ON' )  {
           $configdmr2ysf['Enabled']['Enabled'] = "1";
           unset($configdmrgateway['DMR Network 3']);
           $configdmrgateway['DMR Network 3']['Enabled'] = "0";
@@ -2517,7 +2517,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
           $configmmdvm['System Fusion']['Enable'] = "0";
           $configmmdvm['System Fusion Network']['Enable'] = "0";
       }
-          if (escapeshellcmd($_POST['MMDVMModeDMR2YSF']) == 'OFF' ) {
+          if ($_POST['MMDVMModeDMR2YSF'] === 'OFF' ) {
           $configdmr2ysf['Enabled']['Enabled'] = "0";
           $configdmrgateway['DMR Network 3']['Enabled'] = "0";
       }
@@ -2525,14 +2525,14 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
 
     // Set DMR2NXDN Mode
     if (empty($_POST['MMDVMModeDMR2NXDN']) != TRUE ) {
-          if (escapeshellcmd($_POST['MMDVMModeDMR2NXDN']) == 'ON' )  {
+          if ($_POST['MMDVMModeDMR2NXDN'] === 'ON' )  {
           if (empty($_POST['MMDVMModeDMR2YSF']) != TRUE ) {
-              if (escapeshellcmd($_POST['MMDVMModeDMR2YSF']) == 'ON' )  {
+              if ($_POST['MMDVMModeDMR2YSF'] === 'ON' )  {
                 $configdmr2ysf['Enabled']['Enabled'] = "0";
               }
             }
           if (empty($_POST['MMDVMModeYSF2NXDN']) != TRUE ) {
-              if (escapeshellcmd($_POST['MMDVMModeYSF2NXDN']) == 'ON' )  {
+              if ($_POST['MMDVMModeYSF2NXDN'] === 'ON' )  {
                 $configysf2nxdn['Enabled']['Enabled'] = "0";
               }
             }
@@ -2553,7 +2553,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
           $configmmdvm['NXDN']['Enable'] = "0";
           $configmmdvm['NXDN Network']['Enable'] = "0";
       }
-          if (escapeshellcmd($_POST['MMDVMModeDMR2NXDN']) == 'OFF' ) {
+          if ($_POST['MMDVMModeDMR2NXDN'] === 'OFF' ) {
           $configdmr2nxdn['Enabled']['Enabled'] = "0";
           $configdmrgateway['DMR Network 3']['Enabled'] = "0";
       }
@@ -2561,7 +2561,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
 
     // Work out if DMR Network 3 should be ON or not
     if (empty($_POST['MMDVMModeDMR2YSF']) != TRUE || empty($_POST['MMDVMModeDMR2NXDN']) != TRUE) {
-        if (escapeshellcmd($_POST['MMDVMModeDMR2YSF']) == 'ON' || escapeshellcmd($_POST['MMDVMModeDMR2NXDN']) == 'ON') {
+        if ($_POST['MMDVMModeDMR2YSF'] === 'ON' || $_POST['MMDVMModeDMR2NXDN'] === 'ON') {
             $configdmrgateway['DMR Network 3']['Enabled'] = "1";
         } else {
             $configdmrgateway['DMR Network 3']['Enabled'] = "0";
@@ -2570,8 +2570,8 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
 
     // Set POCSAG Mode
     if (empty($_POST['MMDVMModePOCSAG']) != TRUE ) {
-          if (escapeshellcmd($_POST['MMDVMModePOCSAG']) == 'ON' )  { $configmmdvm['POCSAG']['Enable'] = "1"; $configmmdvm['POCSAG Network']['Enable'] = "1"; }
-          if (escapeshellcmd($_POST['MMDVMModePOCSAG']) == 'OFF' ) { $configmmdvm['POCSAG']['Enable'] = "0"; $configmmdvm['POCSAG Network']['Enable'] = "0"; }
+          if ($_POST['MMDVMModePOCSAG'] === 'ON' )  { $configmmdvm['POCSAG']['Enable'] = "1"; $configmmdvm['POCSAG Network']['Enable'] = "1"; }
+          if ($_POST['MMDVMModePOCSAG'] === 'OFF' ) { $configmmdvm['POCSAG']['Enable'] = "0"; $configmmdvm['POCSAG Network']['Enable'] = "0"; }
     }
 
     // Set the MMDVMHost Display Type
@@ -2597,10 +2597,10 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
 
     // Set the Nextion Display Layout
     if (empty($_POST['mmdvmNextionDisplayType']) != TRUE ) {
-      if (escapeshellcmd($_POST['mmdvmNextionDisplayType']) == "G4KLX") { $configmmdvm['Nextion']['ScreenLayout'] = "0"; }
-      if (escapeshellcmd($_POST['mmdvmNextionDisplayType']) == "ON7LDSL2") { $configmmdvm['Nextion']['ScreenLayout'] = "2"; }
-      if (escapeshellcmd($_POST['mmdvmNextionDisplayType']) == "ON7LDSL3") { $configmmdvm['Nextion']['ScreenLayout'] = "3"; }
-      if (escapeshellcmd($_POST['mmdvmNextionDisplayType']) == "ON7LDSL3HS") { $configmmdvm['Nextion']['ScreenLayout'] = "4"; }
+      if ($_POST['mmdvmNextionDisplayType'] === "G4KLX") { $configmmdvm['Nextion']['ScreenLayout'] = "0"; }
+      if ($_POST['mmdvmNextionDisplayType'] === "ON7LDSL2") { $configmmdvm['Nextion']['ScreenLayout'] = "2"; }
+      if ($_POST['mmdvmNextionDisplayType'] === "ON7LDSL3") { $configmmdvm['Nextion']['ScreenLayout'] = "3"; }
+      if ($_POST['mmdvmNextionDisplayType'] === "ON7LDSL3HS") { $configmmdvm['Nextion']['ScreenLayout'] = "4"; }
     }
 
     // Set MMDVMHost DMR Colour Code
@@ -2616,7 +2616,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
 
     // Set Node Lock Status
     if (empty($_POST['nodeMode']) != TRUE ) {
-      if (escapeshellcmd($_POST['nodeMode']) == 'prv' ) {
+      if ($_POST['nodeMode'] === 'prv' ) {
             $configmmdvm['DMR']['SelfOnly'] = 1;
             $configmmdvm['D-Star']['SelfOnly'] = 1;
         $configmmdvm['System Fusion']['SelfOnly'] = 1;
@@ -2624,7 +2624,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
         $configmmdvm['NXDN']['SelfOnly'] = 1;
             config_writer_stage_flat('/etc/dstarrepeater', 'restriction', '1');
           }
-      if (escapeshellcmd($_POST['nodeMode']) == 'pub' ) {
+      if ($_POST['nodeMode'] === 'pub' ) {
             $configmmdvm['DMR']['SelfOnly'] = 0;
             $configmmdvm['D-Star']['SelfOnly'] = 0;
         $configmmdvm['System Fusion']['SelfOnly'] = 0;
@@ -3169,7 +3169,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
             config_writer_stage_flat('/etc/mobilegps', 'FilePath',     '/var/log/pi-star');
 
             // Enable or Disable MobileGPS
-            if (escapeshellcmd($_POST['mobilegps_enable']) == 'ON' )  {
+            if ($_POST['mobilegps_enable'] === 'ON' )  {
                 $configmmdvm['Mobile GPS']['Enable'] = "1";
                 if (isset($configysfgateway['Mobile GPS']['Enable'])) { $configysfgateway['Mobile GPS']['Enable'] = "1"; }
                 if (isset($confignxdngateway['Mobile GPS']['Enable'])) { $confignxdngateway['Mobile GPS']['Enable'] = "1"; }
@@ -3193,10 +3193,10 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
 
     // Create the hostfiles.nodextra file if required
     if (empty($_POST['confHostFilesNoDExtra']) != TRUE ) {
-        if (escapeshellcmd($_POST['confHostFilesNoDExtra']) == 'ON' )  {
+        if ($_POST['confHostFilesNoDExtra'] === 'ON' )  {
             if (!file_exists('/etc/hostfiles.nodextra')) { system('sudo touch /etc/hostfiles.nodextra'); }
         }
-        if (escapeshellcmd($_POST['confHostFilesNoDExtra']) == 'OFF' )  {
+        if ($_POST['confHostFilesNoDExtra'] === 'OFF' )  {
             if (file_exists('/etc/hostfiles.nodextra')) { system('sudo rm -rf /etc/hostfiles.nodextra'); }
         }
     }
