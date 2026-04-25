@@ -136,6 +136,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/index.php") { // Stop this working outside o
         if (isset($bmAPIkeyV2)) {
           echo '<b>BrandMeister Manager</b>'."\n";
           echo '<form action="'.htmlentities($_SERVER['PHP_SELF']).'" method="post">'."\n";
+          echo csrf_field_html()."\n";
           echo '<table role="presentation">'."\n";
           echo '<tr>
             <th aria-hidden="true" id="lblTG" style="width:25%;"><a class=tooltip href="#">Static Talkgroup<span><b>Enter the Talkgroup number</b></span></a></th>

@@ -162,6 +162,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/index.php") { // Stop this working outside o
       else: // Do this when we are not handling post data
         echo '<b>TGIF Manager</b>'."\n";
         echo '<form action="'.htmlentities($_SERVER['PHP_SELF']).'" method="post">'."\n";
+        echo csrf_field_html()."\n";
         echo '<table>
         <tr>
           <th style="width:25%;"><a class=tooltip href="#">Talkgroup Number<span><b>Enter the Talkgroup number</b></span></a></th>

@@ -91,6 +91,7 @@ echo '<script type="text/javascript">setTimeout(function() { window.location=win
 else: ?>
 <b><?php echo $lang['d-star_link_manager'];?></b>
 <form action="//<?php echo htmlentities($_SERVER['HTTP_HOST']).htmlentities($_SERVER['PHP_SELF']); ?>" method="post">
+<?php csrf_field(); ?>
 <table>
   <tr>
     <th width="150"><a class="tooltip" href="#">Radio Module<span><b>Radio Module</b></span></a></th>

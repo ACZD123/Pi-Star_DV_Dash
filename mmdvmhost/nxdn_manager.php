@@ -79,6 +79,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/index.php") { // Stop this working outside o
           ?>
           <b>NXDN Link Manager</b>
           <form action="//<?php echo htmlentities($_SERVER['HTTP_HOST']).htmlentities($_SERVER['PHP_SELF']); ?>" method="post">
+          <?php csrf_field(); ?>
           <table>
         <tr>
           <th width="150"><a class="tooltip" href="#">Reflector<span><b>Reflector</b></span></a></th>

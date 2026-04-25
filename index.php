@@ -35,6 +35,24 @@
 require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
 setSecurityHeaders();
 
+// CSRF protection — only the /admin/ variant of this file processes
+// state-changing POSTs (the public / dashboard is read-only). One
+// csrf_verify() here covers every form rendered into the admin
+// index — admin/admin.php's reflector linker, the protocol managers
+// under mmdvmhost/ and dstarrepeater/, etc. All of those partials
+// gate themselves on the same PHP_SELF check and post back to
+// /admin/index.php.
+//
+// Kept BEFORE any output for two reasons:
+//   - so the GET-side Set-Cookie ships before HTML body output
+//   - so a forged POST gets a clean 403 + exit() before any
+//     `sudo remotecontrold ...` / link-manager / protocol-manager
+//     state change runs
+if ($_SERVER["PHP_SELF"] == "/admin/index.php") {
+    require_once($_SERVER['DOCUMENT_ROOT'] . '/config/csrf.php');
+    csrf_verify();
+}
+
 require_once('config/version.php');
 require_once('config/ircddblocal.php');
 require_once('config/language.php');
