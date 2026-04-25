@@ -152,14 +152,28 @@ function csrf_field()
  */
 function csrf_verify()
 {
+    // Bootstrap the session up front, even on GET, so the
+    // Set-Cookie header gets emitted before any HTML output.
+    // csrf_field() (called inside the page's <form> tags) is
+    // lazy and may not run until well after output has started,
+    // so without an early csrf_verify() call sites that don't
+    // already have their own pre-output session_start() (most
+    // pages — power.php is the exception) never get a session
+    // cookie. Without a cookie the GET-issued token has no way
+    // to reach the POST handler.
+    //
+    // Pages should call csrf_verify() near the top of the file,
+    // BEFORE any output. On GET it bootstraps the session and
+    // returns; on POST it bootstraps, validates, and either
+    // returns silently or emits 403 + exit().
+    csrf_session_start();
+
     if (!isset($_SERVER['REQUEST_METHOD']) ||
         $_SERVER['REQUEST_METHOD'] !== 'POST') {
         // Only POST is gated — GET pages render the token via
         // csrf_field() and don't need verification.
         return;
     }
-
-    csrf_session_start();
 
     $expected = isset($_SESSION['csrf_token']) ? $_SESSION['csrf_token'] : '';
     $supplied = isset($_POST['csrf_token']) ? $_POST['csrf_token'] : '';

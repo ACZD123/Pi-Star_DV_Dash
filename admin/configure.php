@@ -46,7 +46,20 @@
  */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/config_writer.php');
+require_once($_SERVER['DOCUMENT_ROOT'].'/config/csrf.php');
 setSecurityHeaders();
+
+// CSRF protection — must run BEFORE any output:
+//   - On GET, bootstraps the session so the Set-Cookie header
+//     gets emitted with the response. csrf_field() (called
+//     inside each <form>) is lazy and runs after HTML output has
+//     started, which is too late for session_start() to set a
+//     cookie. Without a cookie the GET-issued token has no way
+//     to reach the POST handler.
+//   - On POST, validates $_POST['csrf_token'] against the
+//     session token. On mismatch the helper emits 403 + exit()
+//     before any side effects (mount-rw, sed/install, etc.) run.
+csrf_verify();
 
 // Get the CPU temp and colour the box accordingly...
 $cpuTempCRaw = exec('cat /sys/class/thermal/thermal_zone0/temp');
@@ -381,6 +394,12 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
     </table>
 <br />
 <?php if (!empty($_POST)):
+    // CSRF verification happens at the very top of this file,
+    // before HTML output begins, so a rejected POST gets a clean
+    // 403 + exit() rather than a half-rendered page. By the time
+    // execution reaches this `if (!empty($_POST))` block any forged
+    // POST has already been rejected.
+
     // Make the root filesystem writable
     system('sudo mount -o remount,rw /');
 
@@ -3897,10 +3916,12 @@ else:
     }
 ?>
 <form id="factoryReset" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post">
+<?php csrf_field(); ?>
     <div><input type="hidden" name="factoryReset" value="1" /></div>
 </form>
 
 <form id="config" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post">
+<?php csrf_field(); ?>
     <h2><?php echo $lang['control_software'];?></h2>
     <table>
     <tr>
@@ -5555,7 +5576,14 @@ echo '
     <iframe frameborder="0" scrolling="auto" name="wifi" src="wifi.php?page=wlan0_info" width="100%" onload="javascript:resizeIframe(this);">If you can see this message, your browser does not support iFrames, however if you would like to see the content please click <a href="wifi.php?page=wlan0_info">here</a>.</iframe>
     </td></tr></table>
     <br />
-    <form id="autoApPassForm" action="'.htmlspecialchars($_SERVER["PHP_SELF"]).'" method="post">
+    <form id="autoApPassForm" action="'.htmlspecialchars($_SERVER["PHP_SELF"]).'" method="post">';
+    // Break the single-quoted echo so csrf_field() (which itself
+    // emits an <input>) can write its hidden token straight to the
+    // output stream alongside the form body. Resuming the echo
+    // immediately afterwards keeps the surrounding HTML structure
+    // intact.
+    csrf_field();
+    echo '
     <table>
     <tr><th width="200">Auto AP SSID</th><th colspan="3">PSK</th></tr>
     <tr>
@@ -5571,6 +5599,7 @@ echo '
 <br />
     <h2><?php echo $lang['remote_access_pw'];?></h2>
     <form id="adminPassForm" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post">
+    <?php csrf_field(); ?>
     <table>
     <tr><th width="200"><?php echo $lang['user'];?></th><th colspan="3"><?php echo $lang['password'];?></th></tr>
     <tr>

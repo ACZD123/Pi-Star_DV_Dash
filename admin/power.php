@@ -16,6 +16,12 @@ require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/csrf.php');
 setSecurityHeaders();
 
+// CSRF protection — see config/csrf.php for the full rationale.
+// Must run BEFORE any output: bootstraps the session on GET (so
+// Set-Cookie ships) and rejects forged POSTs cleanly with 403
+// before any side effect (`sudo reboot`, `sudo shutdown`).
+csrf_verify();
+
 // Load the language support
 require_once('config/language.php');
 // Load the Pi-Star Release file
@@ -64,13 +70,9 @@ if ($_SERVER["PHP_SELF"] == "/admin/power.php") {
   </div>
   <div class="contentwide">
 <?php if (!empty($_POST)) {
-    // Reject any POST that doesn't carry a valid session-scoped CSRF
-    // token. Without this, a hostile page open in another tab could
-    // POST action=reboot or action=shutdown to this endpoint and the
-    // browser would attach the cached basic-auth credential — taking
-    // the device down at attacker's whim. csrf_verify() emits 403 +
-    // exit() on mismatch.
-    csrf_verify();
+    // CSRF verification happens at the top of this file, before
+    // output begins. By the time execution reaches this block any
+    // forged POST has already been rejected.
 ?>
   <table width="100%">
   <tr><th colspan="2"><?php echo $lang['power'];?></th></tr>
