@@ -2537,7 +2537,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
         $configmmdvm['System Fusion']['SelfOnly'] = 1;
         $configmmdvm['P25']['SelfOnly'] = 1;
         $configmmdvm['NXDN']['SelfOnly'] = 1;
-            system('sudo sed -i "/restriction=/c\\restriction=1" /etc/dstarrepeater');
+            config_writer_stage_flat('/etc/dstarrepeater', 'restriction', '1');
           }
       if (escapeshellcmd($_POST['nodeMode']) == 'pub' ) {
             $configmmdvm['DMR']['SelfOnly'] = 0;
@@ -2545,7 +2545,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
         $configmmdvm['System Fusion']['SelfOnly'] = 0;
         $configmmdvm['P25']['SelfOnly'] = 0;
         $configmmdvm['NXDN']['SelfOnly'] = 0;
-            system('sudo sed -i "/restriction=/c\\restriction=0" /etc/dstarrepeater');
+            config_writer_stage_flat('/etc/dstarrepeater', 'restriction', '0');
           }
     }
 
@@ -3074,29 +3074,31 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
             //if (!isset($confignxdngateway['Mobile GPS']['Address'])) { $confignxdngateway['Mobile GPS']['Address'] = "127.0.0.1"; }
             //if (!isset($confignxdngateway['Mobile GPS']['Port'])) { $confignxdngateway['Mobile GPS']['Port'] = "7834"; }
 
-            // Clean up MobilGPS config
-            system('sudo sed -i "/Daemon=/c\\Daemon=0" /etc/mobilegps');
-            system('sudo sed -i "/Debug=/c\\Debug=0" /etc/mobilegps');
-            system('sudo sed -i "/DisplayLevel=/c\\DisplayLevel=0" /etc/mobilegps');
-            system('sudo sed -i "/FileLevel=/c\\FileLevel=1" /etc/mobilegps');
-            system('sudo sed -i "/FilePath=/c\\FilePath=/var/log/pi-star" /etc/mobilegps');
+            // Clean up MobilGPS config (literal values — no $_POST data, but
+            // routed through config_writer to keep the file's edits coherent
+            // with the rest of the C6 migration).
+            config_writer_stage_flat('/etc/mobilegps', 'Daemon',       '0');
+            config_writer_stage_flat('/etc/mobilegps', 'Debug',        '0');
+            config_writer_stage_flat('/etc/mobilegps', 'DisplayLevel', '0');
+            config_writer_stage_flat('/etc/mobilegps', 'FileLevel',    '1');
+            config_writer_stage_flat('/etc/mobilegps', 'FilePath',     '/var/log/pi-star');
 
             // Enable or Disable MobileGPS
             if (escapeshellcmd($_POST['mobilegps_enable']) == 'ON' )  {
                 $configmmdvm['Mobile GPS']['Enable'] = "1";
                 if (isset($configysfgateway['Mobile GPS']['Enable'])) { $configysfgateway['Mobile GPS']['Enable'] = "1"; }
                 if (isset($confignxdngateway['Mobile GPS']['Enable'])) { $confignxdngateway['Mobile GPS']['Enable'] = "1"; }
-                system('sudo sed -i "/Enabled=/c\\Enabled=1" /etc/mobilegps');
+                config_writer_stage_flat('/etc/mobilegps', 'Enabled', '1');
             } else {
                 $configmmdvm['Mobile GPS']['Enable'] = "0";
                 if (isset($configysfgateway['Mobile GPS']['Enable'])) { $configysfgateway['Mobile GPS']['Enable'] = "0"; }
                 if (isset($confignxdngateway['Mobile GPS']['Enable'])) { $confignxdngateway['Mobile GPS']['Enable'] = "0"; }
-                system('sudo sed -i "/Enabled=/c\\Enabled=0" /etc/mobilegps');
+                config_writer_stage_flat('/etc/mobilegps', 'Enabled', '0');
             }
         }
         if (empty($_POST['mobilegps_port']) != TRUE ) {
             $newMobileGPSport = preg_replace('/[^a-z0-9]/i', '', $_POST['mobilegps_port']);
-            system('sudo sed -i "/Port=\/dev/c\\Port=/dev/'.$newMobileGPSport.'" /etc/mobilegps');
+            config_writer_stage_flat('/etc/mobilegps', 'Port', '/dev/' . $newMobileGPSport);
         }
         if (empty($_POST['mobilegps_speed']) != TRUE ) {
             $newMobileGPSspeed = preg_replace('/[^0-9]/', '', $_POST['mobilegps_speed']);
