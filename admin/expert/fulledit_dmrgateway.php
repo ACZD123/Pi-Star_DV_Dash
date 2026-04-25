@@ -9,7 +9,14 @@
  * Restarts BOTH mmdvmhost.service AND dmrgateway.service after save.
  */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
+require_once($_SERVER['DOCUMENT_ROOT'].'/config/csrf.php');
 setSecurityHeaders();
+
+// CSRF protection — see config/csrf.php for the full rationale.
+// Must run BEFORE any output: bootstraps the session on GET (so
+// Set-Cookie ships) and rejects forged POSTs cleanly with 403
+// before any state change (sed-i, fopen+fwrite, sudo cp, etc.).
+csrf_verify();
 
 // Load the language support
 require_once('../config/language.php');
@@ -83,6 +90,7 @@ fclose($fh);
 
 ?>
 <form name="test" method="post" action="">
+<?php csrf_field(); ?>
 <textarea name="data" cols="80" rows="45"><?php echo $theData; ?></textarea><br />
 <input type="submit" name="submit" value="<?php echo $lang['apply']; ?>" />
 </form>

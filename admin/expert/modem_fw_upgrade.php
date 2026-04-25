@@ -12,7 +12,14 @@
  * already constrained to script-reported names).
  */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
+require_once($_SERVER['DOCUMENT_ROOT'].'/config/csrf.php');
 setSecurityHeaders();
+
+// CSRF protection — see config/csrf.php for the full rationale.
+// Must run BEFORE any output: bootstraps the session on GET (so
+// Set-Cookie ships) and rejects forged POSTs cleanly with 403
+// before any state change (sed-i, fopen+fwrite, sudo cp, etc.).
+csrf_verify();
 
 // Load the language support
 require_once('../config/language.php');
@@ -204,6 +211,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/modem_fw_upgrade.php") {
 
         // Create the select element
         echo '<p><form method="post" id="up_fw">';
+        echo csrf_field_html();
         echo '<label for="modem">Select Modem:</label>';
         echo '<select id="modem" name="modem">';
     echo '<option value="" disabled selected>Please choose device type...</option>';

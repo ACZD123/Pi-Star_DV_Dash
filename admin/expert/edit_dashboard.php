@@ -13,7 +13,14 @@
  * emitters that read from /etc/pistar-css.ini.
  */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
+require_once($_SERVER['DOCUMENT_ROOT'].'/config/csrf.php');
 setSecurityHeaders();
+
+// CSRF protection — see config/csrf.php for the full rationale.
+// Must run BEFORE any output: bootstraps the session on GET (so
+// Set-Cookie ships) and rejects forged POSTs cleanly with 403
+// before any state change (sed-i, fopen+fwrite, sudo cp, etc.).
+csrf_verify();
 
 // Load the language support
 require_once('../config/language.php');
@@ -160,6 +167,7 @@ if (isset($parsed_ini['Lookup']['popupWidth']))  { unset($parsed_ini['Lookup']['
 if (isset($parsed_ini['Lookup']['popupHeight'])) { unset($parsed_ini['Lookup']['popupHeight']); }
 
 echo '<form action="" method="post">'."\n";
+echo csrf_field_html()."\n";
     foreach($parsed_ini as $section=>$values) {
         // keep the section as hidden text so we can update once the form submitted
         echo "<input type=\"hidden\" value=\"$section\" name=\"$section\" />\n";
@@ -195,6 +203,7 @@ echo "</form>";
 echo "<br />\n";
 echo 'if you took it all too far and now it makes you feel sick, click below to reset the changes made on this page, this will ONLY reset the CSS settings above and will not change any other settings or configuration.'."\n";
 echo '<form id="factoryReset" action="" method="post">'."\n";
+echo csrf_field_html()."\n";
 echo '  <div><input type="hidden" name="factoryReset" value="1" /></div>'."\n";
 echo '</form>'."\n";
 echo '<input type="button" onclick="javascript:factoryReset();" value="'.$lang['factory_reset'].'" />'."\n";

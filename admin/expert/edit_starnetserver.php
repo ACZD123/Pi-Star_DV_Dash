@@ -12,7 +12,14 @@
  * a future cleanup pass.
  */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
+require_once($_SERVER['DOCUMENT_ROOT'].'/config/csrf.php');
 setSecurityHeaders();
+
+// CSRF protection — see config/csrf.php for the full rationale.
+// Must run BEFORE any output: bootstraps the session on GET (so
+// Set-Cookie ships) and rejects forged POSTs cleanly with 403
+// before any state change (sed-i, fopen+fwrite, sudo cp, etc.).
+csrf_verify();
 
 // Load the language support
 require_once('../config/language.php');
@@ -115,6 +122,7 @@ if($_POST) {
 $parsed_ini = parse_ini_file($filepath, true);
 
 echo '<form action="" method="post">'."\n";
+echo csrf_field_html()."\n";
     foreach($parsed_ini as $section=>$values) {
         // keep the section as hidden text so we can update once the form submitted
         echo "<input type=\"hidden\" value=\"$section\" name=\"$section\" />\n";
