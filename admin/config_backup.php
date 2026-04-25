@@ -28,6 +28,19 @@
  * No setSecurityHeaders() call here either. All flagged for the
  * security pass; no fixes in this commit.
  */
+require_once($_SERVER['DOCUMENT_ROOT'].'/config/csrf.php');
+
+// CSRF protection — see config/csrf.php for the full rationale.
+// Must run BEFORE any output: bootstraps the session on GET (so
+// Set-Cookie ships) and rejects forged POSTs cleanly with 403
+// before the download / restore handlers run.
+//
+// CSRF protection here makes C1's zip-slip / restore-pipeline RCE
+// harder to exploit (attacker can no longer trigger restore via a
+// cross-site click); the underlying bugs in the restore handler
+// remain — they are tracked separately as the C1/C2 work-on-hold.
+csrf_verify();
+
 // Load the language support
 require_once('config/language.php');
 // Load the Pi-Star Release file
@@ -40,7 +53,10 @@ require_once('config/version.php');
 if ($_SERVER["PHP_SELF"] == "/admin/config_backup.php") {
   // Sanity Check Passed.
   header('Cache-Control: no-cache');
-  session_start();
+  // session_start() is no longer called here — csrf_verify() at
+  // the top of the file already started the session via
+  // csrf_session_start(). A second session_start() would emit a
+  // "session is already active" NOTICE on PHP 8.x.
 ?>
   <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -265,6 +281,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/config_backup.php") {
   echo "</table>\n";
   } else { ?>
   <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post" enctype="multipart/form-data">
+  <?php csrf_field(); ?>
   <table width="100%">
   <tr>
     <th colspan="2"><?php echo $lang['backup_restore'];?></th>
