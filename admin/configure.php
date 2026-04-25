@@ -35,12 +35,14 @@
  *     /etc/dstar-radio.dstarrepeater marker.
  *
  * For the full per-field map see .local-notes/configure-map.md
- * (outside the repo). Several known oddities live in this file —
- * `escapeshellcmd()` misused for non-shell purposes, a `rcddbEnabled`
- * sed-pattern typo (line ~979), a 2 m simplex band misroute to the
- * timeserver (line ~867), and P25/NXDN hang-time fields hardcoded to
- * 0 in the gateway configs regardless of input. All flagged for the
- * security pass; not addressed here.
+ * (outside the repo). Remaining known oddities — `escapeshellcmd()`
+ * misused for non-shell string equality, P25/NXDN hang-time form
+ * fields hardcoded to 0 in the gateway configs regardless of submitted
+ * value — are flagged in the security-pass task list. Earlier audits
+ * also flagged a `rcddbEnabled=` sed pattern fragility (now anchored to
+ * `^ircddbEnabled=` defensively) and a 2 m simplex band copy-paste bug
+ * that misrouted `sendA=1` to the timeserver instead of `sendC=1` (now
+ * fixed).
  */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setSecurityHeaders();
@@ -1074,7 +1076,11 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
         $confRPT1 = str_pad(escapeshellcmd($_POST['confCallsign']), 7, " ")."C";
         $confIRCrepeaterBand1 = "C";
         $configmmdvm['D-Star']['Module'] = "C";
-        $rollTimeserverBand = 'sudo sed -i "/sendA=/c\\sendA=1" /etc/timeserver';
+        // Fix: was `sendA=1` here (copy-paste from the 23 cm/A and 70 cm/B
+        // branches above). The 2 m band's D-Star module is "C", so the
+        // matching timeserver send key is `sendC=`, not `sendA=`. The
+        // duplex 2 m branch (~line 962) already uses sendC correctly.
+        $rollTimeserverBand = 'sudo sed -i "/sendC=/c\\sendC=1" /etc/timeserver';
         system($rollTimeserverBand);
         }
       }
@@ -1183,17 +1189,29 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
       system($rollSTARNETSERVERirc);
     }
 
-    // Set the ircDDB Callsign routing option
-    if (empty($_POST['confircddbEnabled']) != TRUE ) {
-        if (escapeshellcmd($_POST['confircddbEnabled']) == 'ON' ) {
-            $rollconfircddbEnabled = 'sudo sed -i "/rcddbEnabled=/c\\ircddbEnabled=1" /etc/ircddbgateway';
+    // Set the ircDDB Callsign routing option.
+    //
+    // Hardening: the previous sed patterns `/rcddbEnabled=/` and
+    // `/rcddbHostname=/` were missing their leading `i`. They worked in
+    // practice because `rcddbEnabled=` is a substring of `ircddbEnabled=`
+    // and the only line in /etc/ircddbgateway that contains that substring
+    // (with the trailing `=`) is the intended one — `ircddbEnabled2=` /
+    // `ircddbEnabled3=` etc. don't match because the `=` appears after the
+    // digit, not after `Enabled`. So the typo was a fragility risk, not an
+    // active bug — but a future ircddbgateway field whose name happened to
+    // include `rcddbEnabled=` would break silently. Anchoring to
+    // `/^ircddbEnabled=/` (and the hostname equivalent) makes the intent
+    // explicit and forecloses that class of regression.
+    if (empty($_POST['confircddbEnabled']) != TRUE) {
+        if (escapeshellcmd($_POST['confircddbEnabled']) == 'ON') {
+            $rollconfircddbEnabled = 'sudo sed -i "/^ircddbEnabled=/c\\ircddbEnabled=1" /etc/ircddbgateway';
         }
-        if (escapeshellcmd($_POST['confircddbEnabled']) == 'OFF' ) {
-            $rollconfircddbEnabled = 'sudo sed -i "/rcddbEnabled=/c\\ircddbEnabled=0" /etc/ircddbgateway';
+        if (escapeshellcmd($_POST['confircddbEnabled']) == 'OFF') {
+            $rollconfircddbEnabled = 'sudo sed -i "/^ircddbEnabled=/c\\ircddbEnabled=0" /etc/ircddbgateway';
         }
         if (isset($configs['ircddbHostname']) && $configs['ircddbHostname'] == "rr.openquad.net") {
-            $rollconfircddbEnabled = 'sudo sed -i "/rcddbEnabled=/c\\ircddbEnabled=0" /etc/ircddbgateway';
-            $rollconfircddbHostname = 'sudo sed -i "/rcddbHostname=/c\\ircddbHostname=ircv4.openquad.net" /etc/ircddbgateway';
+            $rollconfircddbEnabled  = 'sudo sed -i "/^ircddbEnabled=/c\\ircddbEnabled=0" /etc/ircddbgateway';
+            $rollconfircddbHostname = 'sudo sed -i "/^ircddbHostname=/c\\ircddbHostname=ircv4.openquad.net" /etc/ircddbgateway';
             system($rollconfircddbHostname);
         }
         system($rollconfircddbEnabled);
