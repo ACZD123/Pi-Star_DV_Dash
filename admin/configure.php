@@ -1203,8 +1203,6 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
       if (isset($configs['aprsPassword'])) {
           config_writer_stage_flat('/etc/ircddbgateway', 'aprsPassword', aprspass($newCallsignUpper));
       }
-
-      system($rollDASHBOARDcall);
     }
 
     // Set the ircDDB Callsign routing option.
