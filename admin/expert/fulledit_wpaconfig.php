@@ -1,4 +1,15 @@
 <?php
+/**
+ * Raw text editor for /etc/wpa_supplicant/wpa_supplicant.conf.
+ *
+ * Operator-editable WiFi configuration. Standard staged-write pattern,
+ * but with a known oddity: this file leaves the live config
+ * chowned `www-data:www-data` (rather than the usual `root:root` other
+ * editors restore) — flagged for the security pass.
+ *
+ * No daemon restart from this file; the operator must reset the WiFi
+ * adapter (admin/wifi.php has buttons) for changes to take effect.
+ */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setSecurityHeaders();
 
@@ -85,3 +96,4 @@ Get your copy of Pi-Star from <a style="color: #ffffff;" href="http://www.pistar
 </div>
 </body>
 </html>
+

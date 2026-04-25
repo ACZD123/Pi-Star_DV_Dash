@@ -1,4 +1,22 @@
 <?php
+/**
+ * Expert INI editor for /etc/nxdngateway.
+ *
+ * Renders a per-section / per-key form built from parse_ini_file()
+ * output, accepts edits via POST, then writes the result back to
+ * /etc/nxdngateway using the standard Pi-Star copy-via-/tmp pattern:
+ *   1. sudo cp /etc/nxdngateway /tmp/<obfuscated>.tmp + chown www-data
+ *      + chmod 664 (so PHP can edit the temp).
+ *   2. fopen('w') and fwrite the rebuilt INI text into the temp.
+ *   3. sudo mount -o remount,rw / + sudo cp temp -> /etc/nxdngateway
+ *      + sudo chmod 644 + sudo chown root:root + sudo mount -o
+ *      remount,ro / to seal the rootfs again.
+ *   4. sudo systemctl restart nxdngateway.service to pick up the change.
+ *
+ * Admin-only access; the dashboard's Apache basic-auth gate is the
+ * sole protection. The validation is what's in the form (none, in
+ * effect — operator-typed values are written raw). Treat with care.
+ */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setSecurityHeaders();
 
@@ -45,69 +63,70 @@ $filepath = '/tmp/aFEds45dgs4tFS.tmp';
 
 // after the form submit
 if($_POST) {
-	$data = $_POST;
-	//update ini file, call function
-	update_ini_file($data, $filepath);
+    $data = $_POST;
+    //update ini file, call function
+    update_ini_file($data, $filepath);
 }
 
 // this is the function going to update your ini file
-	function update_ini_file($data, $filepath) {
-		$content = "";
+    function update_ini_file($data, $filepath)
+    {
+        $content = "";
 
-		// parse the ini file to get the sections
-		// parse the ini file using default parse_ini_file() PHP function
-		$parsed_ini = parse_ini_file($filepath, true);
+        // parse the ini file to get the sections
+        // parse the ini file using default parse_ini_file() PHP function
+        $parsed_ini = parse_ini_file($filepath, true);
 
-		foreach($data as $section=>$values) {
-			// UnBreak special cases
-			if (strpos($section, 'aprs') !== false) { $section = str_replace("_", ".", $section); }
-			else { $section = str_replace("_", " ", $section); $section = str_replace(".", " ", $section); }
-			$content .= "[".$section."]\n";
-			//append the values
-			foreach($values as $key=>$value) {
-				$content .= $key."=".$value."\n";
-			}
-			$content .= "\n";
-		}
+        foreach($data as $section=>$values) {
+            // UnBreak special cases
+            if (strpos($section, 'aprs') !== false) { $section = str_replace("_", ".", $section); }
+            else { $section = str_replace("_", " ", $section); $section = str_replace(".", " ", $section); }
+            $content .= "[".$section."]\n";
+            //append the values
+            foreach($values as $key=>$value) {
+                $content .= $key."=".$value."\n";
+            }
+            $content .= "\n";
+        }
 
-		// write it into file
-		if (!$handle = fopen($filepath, 'w')) {
-			return false;
-		}
+        // write it into file
+        if (!$handle = fopen($filepath, 'w')) {
+            return false;
+        }
 
-		$success = fwrite($handle, $content);
-		fclose($handle);
+        $success = fwrite($handle, $content);
+        fclose($handle);
 
-		// Updates complete - copy the working file back to the proper location
-		exec('sudo mount -o remount,rw /');                       // Make rootfs writable
-		exec('sudo cp /tmp/aFEds45dgs4tFS.tmp /etc/nxdngateway'); // Move the file back
-		exec('sudo chmod 644 /etc/nxdngateway');                  // Set the correct runtime permissions
-		exec('sudo chown root:root /etc/nxdngateway');            // Set the owner
-		exec('sudo mount -o remount,ro /');                       // Make rootfs read-only
+        // Updates complete - copy the working file back to the proper location
+        exec('sudo mount -o remount,rw /');                       // Make rootfs writable
+        exec('sudo cp /tmp/aFEds45dgs4tFS.tmp /etc/nxdngateway'); // Move the file back
+        exec('sudo chmod 644 /etc/nxdngateway');                  // Set the correct runtime permissions
+        exec('sudo chown root:root /etc/nxdngateway');            // Set the owner
+        exec('sudo mount -o remount,ro /');                       // Make rootfs read-only
 
-		// Reload the affected daemon
-		exec('sudo systemctl restart nxdngateway.service');       // Reload the daemon
-		return $success;
-	}
+        // Reload the affected daemon
+        exec('sudo systemctl restart nxdngateway.service');       // Reload the daemon
+        return $success;
+    }
 
 // parse the ini file using default parse_ini_file() PHP function
 $parsed_ini = parse_ini_file($filepath, true);
 
 echo '<form action="" method="post">'."\n";
-	foreach($parsed_ini as $section=>$values) {
-		// keep the section as hidden text so we can update once the form submitted
-		echo "<input type=\"hidden\" value=\"$section\" name=\"$section\" />\n";
-		echo "<table>\n";
-		echo "<tr><th colspan=\"2\">$section</th></tr>\n";
-		// print all other values as input fields, so can edit. 
-		// note the name='' attribute it has both section and key
-		foreach($values as $key=>$value) {
-			echo "<tr><td align=\"right\" width=\"30%\">$key</td><td align=\"left\"><input type=\"text\" name=\"{$section}[$key]\" value=\"$value\" /></td></tr>\n";
-		}
-		echo "</table>\n";
-		echo '<input type="submit" value="'.$lang['apply'].'" />'."\n";
-		echo "<br />\n";
-	}
+    foreach($parsed_ini as $section=>$values) {
+        // keep the section as hidden text so we can update once the form submitted
+        echo "<input type=\"hidden\" value=\"$section\" name=\"$section\" />\n";
+        echo "<table>\n";
+        echo "<tr><th colspan=\"2\">$section</th></tr>\n";
+        // print all other values as input fields, so can edit.
+        // note the name='' attribute it has both section and key
+        foreach($values as $key=>$value) {
+            echo "<tr><td align=\"right\" width=\"30%\">$key</td><td align=\"left\"><input type=\"text\" name=\"{$section}[$key]\" value=\"$value\" /></td></tr>\n";
+        }
+        echo "</table>\n";
+        echo '<input type="submit" value="'.$lang['apply'].'" />'."\n";
+        echo "<br />\n";
+    }
 echo "</form>";
 ?>
 </div>
@@ -121,3 +140,4 @@ Get your copy of Pi-Star from <a style="color: #ffffff;" href="http://www.pistar
 </div>
 </body>
 </html>
+

@@ -1,4 +1,15 @@
 <?php
+/**
+ * ShellInABox iframe wrapper.
+ *
+ * Reads the configured shellinabox port from /etc/default/shellinabox
+ * and embeds the in-browser SSH terminal as an <iframe>. Uses
+ * setSecurityHeadersAllowDifferentPorts() to relax the default same-
+ * origin frame restriction so the iframe can target a non-80 port on
+ * the same host.
+ *
+ * No file edits, no privileged calls — pure UI wrapper.
+ */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setSecurityHeadersAllowDifferentPorts();
 
@@ -68,4 +79,3 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/ssh_access.php") {
 
 <?php
 }
-?>

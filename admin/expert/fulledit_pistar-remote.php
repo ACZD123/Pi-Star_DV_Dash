@@ -1,4 +1,11 @@
 <?php
+/**
+ * Raw text editor for /etc/pistar-remote.
+ *
+ * Pi-Star Remote-Control daemon config (DTMF-driven actions, command
+ * mappings, etc.). Saved via the standard staged-write pattern;
+ * daemon: pistar-remote.service.
+ */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setSecurityHeaders();
 
@@ -50,9 +57,9 @@ if(isset($_POST['data'])) {
         exec('sudo chmod 644 /etc/pistar-remote');
         exec('sudo chown root:root /etc/pistar-remote');
         exec('sudo mount -o remount,ro /');
-  
+
         // Reload the affected daemon
-		    exec('sudo systemctl restart pistar-remote.service');		    // Reload the daemon
+            exec('sudo systemctl restart pistar-remote.service');            // Reload the daemon
 
         // Re-open the file and read it
         $fh = fopen($filepath, 'r');
@@ -88,3 +95,4 @@ Get your copy of Pi-Star from <a style="color: #ffffff;" href="http://www.pistar
 </div>
 </body>
 </html>
+

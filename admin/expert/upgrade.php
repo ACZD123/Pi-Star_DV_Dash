@@ -1,4 +1,12 @@
 <?php
+/**
+ * Pi-Star firmware/software upgrade runner.
+ *
+ * Triggers `sudo /usr/local/sbin/pistar-upgrade` (a longer-running
+ * sibling of /admin/update.php's pistar-update). Output streams to
+ * /var/log/pi-star/pi-star_upgrade.log and is tailed via AJAX.
+ * Requires an explicit POST confirmation field before kicking off.
+ */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setSecurityHeaders();
 
@@ -34,13 +42,13 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/upgrade.php") {
       $_SESSION['update_offset'] = 0;
     }
   }
-  
+
   if (isset($_GET['ajax'])) {
     //session_start();
     if (!file_exists('/var/log/pi-star/pi-star_upgrade.log')) {
       exit();
     }
-    
+
     $handle = fopen('/var/log/pi-star/pi-star_upgrade.log', 'rb');
     if (isset($_SESSION['update_offset'])) {
       fseek($handle, 0, SEEK_END);
@@ -53,10 +61,10 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/upgrade.php") {
     else {
       fseek($handle, 0, SEEK_END);
       $_SESSION['update_offset'] = ftell($handle);
-      } 
+      }
   exit();
   }
-  
+
 ?>
   <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -141,4 +149,3 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/upgrade.php") {
 
 <?php
 }
-?>

@@ -1,4 +1,15 @@
 <?php
+/**
+ * Raw text editor for /etc/crontab.
+ *
+ * Drops the parse_ini_file dance — the file is a plain text crontab,
+ * not an INI. POST data lands in a textarea, gets staged to
+ * /tmp/<obfuscated>.tmp, then sudo-copied back into /etc/crontab.
+ * No daemon restart (cron rereads its config automatically).
+ *
+ * Operator can edit any cron line, including the pistar-* timer hooks
+ * — read carefully before saving.
+ */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setSecurityHeaders();
 
@@ -85,3 +96,4 @@ Get your copy of Pi-Star from <a style="color: #ffffff;" href="http://www.pistar
 </div>
 </body>
 </html>
+

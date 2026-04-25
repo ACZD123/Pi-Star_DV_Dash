@@ -1,4 +1,13 @@
 <?php
+/**
+ * Expert-section landing page.
+ *
+ * Renders the warning banner explaining what the expert editors do
+ * and that hand-edits can be overwritten by the dashboard. The
+ * navigation strip with links to every editor lives in
+ * header-menu.inc which is included from this file (and every
+ * editor page).
+ */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setSecurityHeaders();
 
@@ -65,4 +74,5 @@ Get your copy of Pi-Star from <a style="color: #ffffff;" href="http://www.pistar
 </div>
 </body>
 </html>
+
 

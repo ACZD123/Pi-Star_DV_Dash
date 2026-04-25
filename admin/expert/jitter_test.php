@@ -1,4 +1,15 @@
 <?php
+/**
+ * Network jitter test runner.
+ *
+ * Lets the operator pick a target (BrandMeister / DMR+ / HBLink) and
+ * runs `sudo /usr/local/sbin/pistar-jittertest <target>` on the
+ * device; output streams to /var/log/pi-star/pi-star_icmptest.log
+ * which this page tails via AJAX (jquery-timing $.repeat).
+ *
+ * Uses system()/exec() rather than the staged-write pattern — no
+ * file edits, just a privileged background process.
+ */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setSecurityHeaders();
 
@@ -117,4 +128,3 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/jitter_test.php") {
 
 <?php
 }
-?>

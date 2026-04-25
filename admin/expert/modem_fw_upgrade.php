@@ -1,4 +1,16 @@
 <?php
+/**
+ * Modem firmware upgrade runner.
+ *
+ * Calls `sudo /usr/local/sbin/pistar-modemupgrade list` to enumerate
+ * supported modem variants, then `sudo /usr/local/sbin/pistar-
+ * modemupgrade <variant>` to flash the selected one. Output streams
+ * to /var/log/pi-star/pi-star_modemflash.log; tailed via AJAX.
+ *
+ * The selected variant is run through escapeshellarg() before being
+ * passed to the upgrade script (defence-in-depth — the picklist is
+ * already constrained to script-reported names).
+ */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setSecurityHeaders();
 
@@ -18,15 +30,15 @@ setlocale(LC_ALL, "LC_CTYPE=en_GB.UTF-8;LC_NUMERIC=C;LC_TIME=C;LC_COLLATE=C;LC_M
 if ($_SERVER["PHP_SELF"] == "/admin/expert/modem_fw_upgrade.php") {
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-	if (isset($_POST['modem'])) {
-	    $selectedOption = $_POST['modem'];
-	}
+    if (isset($_POST['modem'])) {
+        $selectedOption = $_POST['modem'];
+    }
     }
 
     if (!isset($_GET['ajax'])) {
-	system('sudo touch /var/log/pi-star/pi-star_modemflash.log > /dev/null 2>&1 &');
-	system('sudo echo "" > /var/log/pi-star/pi-star_modemflash.log > /dev/null 2>&1 &');
-	if (isset($selectedOption)) { system('sudo NP=1 /usr/local/sbin/pistar-modemupgrade ' . escapeshellarg($selectedOption) . ' > /dev/null 2>&1 &'); }
+    system('sudo touch /var/log/pi-star/pi-star_modemflash.log > /dev/null 2>&1 &');
+    system('sudo echo "" > /var/log/pi-star/pi-star_modemflash.log > /dev/null 2>&1 &');
+    if (isset($selectedOption)) { system('sudo NP=1 /usr/local/sbin/pistar-modemupgrade ' . escapeshellarg($selectedOption) . ' > /dev/null 2>&1 &'); }
     }
 
     // passed sanity chk.
@@ -34,13 +46,13 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/modem_fw_upgrade.php") {
     session_start();
 
     if (!isset($_GET['ajax'])) {
-	if (file_exists('/var/log/pi-star/pi-star_modemflash.log')) {
-	    $_SESSION['update_offset'] = filesize('/var/log/pi-star/pi-star_modemflash.log');
-	} else {
-	    $_SESSION['update_offset'] = 0;
+    if (file_exists('/var/log/pi-star/pi-star_modemflash.log')) {
+        $_SESSION['update_offset'] = filesize('/var/log/pi-star/pi-star_modemflash.log');
+    } else {
+        $_SESSION['update_offset'] = 0;
         }
     }
-  
+
     if (isset($_GET['ajax'])) {
         if (!file_exists('/var/log/pi-star/pi-star_modemflash.log')) {
             exit();
@@ -57,10 +69,10 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/modem_fw_upgrade.php") {
         else {
             fseek($handle, 0, SEEK_END);
             $_SESSION['update_offset'] = ftell($handle);
-        } 
+        }
         exit();
     }
- 
+
    // Get the firmware version
    if (file_exists('/usr/local/bin/firmware/version.txt')) {
        $versionData = parse_ini_file('/usr/local/bin/firmware/version.txt', true);
@@ -95,19 +107,21 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/modem_fw_upgrade.php") {
     <script type="text/javascript" src="/jquery.min.js"></script>
     <script type="text/javascript" src="/jquery-timing.min.js"></script>
     <script type="text/javascript">
-    function disableSubmitButtons() {
+    function disableSubmitButtons()
+    {
             var inputs = document.getElementsByTagName('input');
             for (var i = 0; i < inputs.length; i++) {
                     if (inputs[i].type === 'button') {
                             inputs[i].disabled = true;
-		            inputs[i].value = 'Please Wait...';
+                    inputs[i].value = 'Please Wait...';
                     }
             }
     }
 
-    function submitform() {
-	disableSubmitButtons();
-	document.getElementById("up_fw").submit();
+    function submitform()
+    {
+    disableSubmitButtons();
+    document.getElementById("up_fw").submit();
     }
 
     $(function() {
@@ -132,16 +146,16 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/modem_fw_upgrade.php") {
   <?php if (empty($_POST['modem'])) { ?>
   <tr><th>Modem Firmware Upgrade Utility</th></tr>
   <tr><td>
-	<br />
-	<h2>Modem Firmware Upgrade Utility</h2>
-	<p>This tool will attempt to upgrade your selected modem to the latest version available firmware version:<br />
-	<?php echo $fw_ver_msg; ?></p>
-	<p>When ready, select your modem type below and click, "Upgrade Modem". Do not interrupt the process or<br />
-	navigate away from the page while the process is running.</p>
-	<p><strong>Please understand what you are doing, as well as the risks associated with flashing your modem.</strong></p>
-	<p><em>(IMPORTANT: Please note, we are not firmware developers, and we offer no support for firmware.<br />
-	We provide utilities to update the firmware. For firmware support, you will need to utilise other<br />
-	support resources from the firmware developers/maintainers or the web.)</em></p>
+    <br />
+    <h2>Modem Firmware Upgrade Utility</h2>
+    <p>This tool will attempt to upgrade your selected modem to the latest version available firmware version:<br />
+    <?php echo $fw_ver_msg; ?></p>
+    <p>When ready, select your modem type below and click, "Upgrade Modem". Do not interrupt the process or<br />
+    navigate away from the page while the process is running.</p>
+    <p><strong>Please understand what you are doing, as well as the risks associated with flashing your modem.</strong></p>
+    <p><em>(IMPORTANT: Please note, we are not firmware developers, and we offer no support for firmware.<br />
+    We provide utilities to update the firmware. For firmware support, you will need to utilise other<br />
+    support resources from the firmware developers/maintainers or the web.)</em></p>
   </td></tr>
   <tr><td>
 <?php
@@ -192,12 +206,12 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/modem_fw_upgrade.php") {
         echo '<p><form method="post" id="up_fw">';
         echo '<label for="modem">Select Modem:</label>';
         echo '<select id="modem" name="modem">';
-	echo '<option value="" disabled selected>Please choose device type...</option>';
-	// Output each option with user-friendly names
-	foreach ($options as $option) {
-	    $friendlyName = isset($friendlyNames[$option]) ? $friendlyNames[$option] : $option;
-	    echo '<option value="' . htmlspecialchars($option) . '">' . htmlspecialchars($friendlyName) . '</option>';
- 	}
+    echo '<option value="" disabled selected>Please choose device type...</option>';
+    // Output each option with user-friendly names
+    foreach ($options as $option) {
+        $friendlyName = isset($friendlyNames[$option]) ? $friendlyNames[$option] : $option;
+        echo '<option value="' . htmlspecialchars($option) . '">' . htmlspecialchars($friendlyName) . '</option>';
+     }
         echo '</select>';
         echo '<input type="button" value="Upgrade Modem" onclick="submitform()">';
         echo '</form></p>';
@@ -233,7 +247,5 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/modem_fw_upgrade.php") {
   </div>
   </body>
   </html>
-<?php } 
+<?php }
 }
-?>
-

@@ -1,4 +1,11 @@
 <?php
+/**
+ * Raw text editor for /usr/local/etc/RSSI.dat.
+ *
+ * The modem RSSI calibration table — non-/etc location, edited the
+ * same way as the other fulledit_* files. No daemon restart (MMDVMHost
+ * re-reads RSSI.dat on its own).
+ */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setSecurityHeaders();
 
@@ -85,3 +92,4 @@ Get your copy of Pi-Star from <a style="color: #ffffff;" href="http://www.pistar
 </div>
 </body>
 </html>
+

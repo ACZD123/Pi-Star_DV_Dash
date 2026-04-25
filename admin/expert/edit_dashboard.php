@@ -1,4 +1,17 @@
 <?php
+/**
+ * Expert editor for /etc/pistar-css.ini — the dashboard theme overrides.
+ *
+ * Same staged-write pattern as the other edit_*.php files except no
+ * daemon restart is needed (CSS is loaded fresh on the next page hit).
+ * Provides a 'Reset to defaults' path that does a `sudo rm -rf` on
+ * /etc/pistar-css.ini inside the mount-rw window — guarded only by a
+ * JS confirm() prompt; flag for the security pass.
+ *
+ * Output of this editor is consumed by css/pistar-css.php,
+ * css/pistar-css-mini.php, and admin/wifi/styles.php — the three CSS
+ * emitters that read from /etc/pistar-css.ini.
+ */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setSecurityHeaders();
 
@@ -30,13 +43,13 @@ require_once('../config/version.php');
     <link rel="stylesheet" type="text/css" href="../css/pistar-css.php" />
     <script type="text/javascript">
       function factoryReset()
-	{
-	  if (confirm('WARNING: This will set these settings back to factory defaults.\n\nAre you SURE you want to do this?\n\nPress OK to restore the factory configuration\nPress Cancel to go back.')) {
-	    document.getElementById("factoryReset").submit();
-	    } else {
-	    return false;
-	    }
-	}
+      {
+      if (confirm('WARNING: This will set these settings back to factory defaults.\n\nAre you SURE you want to do this?\n\nPress OK to restore the factory configuration\nPress Cancel to go back.')) {
+        document.getElementById("factoryReset").submit();
+        } else {
+        return false;
+        }
+    }
     </script>
   </head>
   <body>
@@ -46,24 +59,24 @@ require_once('../config/version.php');
 
 <?php
 if (!file_exists('/etc/pistar-css.ini')) {
-	//The source file does not exist, lets create it....
-	$outFile = fopen("/tmp/bW1kd4jg6b3N0DQo.tmp", "w") or die("Unable to open file!");
-	$fileContent = "[Background]\nPage=edf0f5\nContent=ffffff\nBanners=dd4b39\n\n";
-	$fileContent .= "[Text]\nBanners=ffffff\nBannersDrop=303030\n\n";
-	$fileContent .= "[Tables]\nHeadDrop=8b0000\nBgEven=f7f7f7\nBgOdd=d0d0d0\n\n";
-	$fileContent .= "[Content]\nText=000000\n\n";
-	$fileContent .= "[BannerH1]\nEnabled=0\nText=\"Some Text\"\n\n";
-	$fileContent .= "[BannerExtText]\nEnabled=0\nText=\"Some long text entry\"\n\n";
-	$fileContent .= "[Lookup]\nService=\"RadioID\"\n";
-	fwrite($outFile, $fileContent);
-	fclose($outFile);
-	
-	// Put the file back where it should be
-	exec('sudo mount -o remount,rw /');                             // Make rootfs writable
-	exec('sudo cp /tmp/bW1kd4jg6b3N0DQo.tmp /etc/pistar-css.ini');  // Move the file back
-	exec('sudo chmod 644 /etc/pistar-css.ini');                     // Set the correct runtime permissions
-	exec('sudo chown root:root /etc/pistar-css.ini');               // Set the owner
-	exec('sudo mount -o remount,ro /');                             // Make rootfs read-only
+    //The source file does not exist, lets create it....
+    $outFile = fopen("/tmp/bW1kd4jg6b3N0DQo.tmp", "w") or die("Unable to open file!");
+    $fileContent = "[Background]\nPage=edf0f5\nContent=ffffff\nBanners=dd4b39\n\n";
+    $fileContent .= "[Text]\nBanners=ffffff\nBannersDrop=303030\n\n";
+    $fileContent .= "[Tables]\nHeadDrop=8b0000\nBgEven=f7f7f7\nBgOdd=d0d0d0\n\n";
+    $fileContent .= "[Content]\nText=000000\n\n";
+    $fileContent .= "[BannerH1]\nEnabled=0\nText=\"Some Text\"\n\n";
+    $fileContent .= "[BannerExtText]\nEnabled=0\nText=\"Some long text entry\"\n\n";
+    $fileContent .= "[Lookup]\nService=\"RadioID\"\n";
+    fwrite($outFile, $fileContent);
+    fclose($outFile);
+
+    // Put the file back where it should be
+    exec('sudo mount -o remount,rw /');                             // Make rootfs writable
+    exec('sudo cp /tmp/bW1kd4jg6b3N0DQo.tmp /etc/pistar-css.ini');  // Move the file back
+    exec('sudo chmod 644 /etc/pistar-css.ini');                     // Set the correct runtime permissions
+    exec('sudo chown root:root /etc/pistar-css.ini');               // Set the owner
+    exec('sudo mount -o remount,ro /');                             // Make rootfs read-only
 }
 
 //Do some file wrangling...
@@ -76,69 +89,70 @@ $filepath = '/tmp/bW1kd4jg6b3N0DQo.tmp';
 
 //after the form submit
 if($_POST) {
-	$data = $_POST;
-	// Factory Reset Handler Here
-	if (empty($_POST['factoryReset']) != TRUE ) {
-		echo "<br />\n";
-		echo "<table>\n";
-		echo "<tr><th>Factory Reset Config</th></tr>\n";
-		echo "<tr><td>Loading fresh configuration file(s)...</td><tr>\n";
-		echo "</table>\n";
-		unset($_POST);
-		//Reset the config
-		exec('sudo mount -o remount,rw /');                             // Make rootfs writable
-		exec('sudo rm -rf /etc/pistar-css.ini');                        // Delete the Config
-		exec('sudo mount -o remount,ro /');                             // Make rootfs read-only
-		echo '<script type="text/javascript">setTimeout(function() { window.location=window.location;},0);</script>';
-		die();
-	} else {
-		//update ini file, call function
-		update_ini_file($data, $filepath);
-	}
+    $data = $_POST;
+    // Factory Reset Handler Here
+    if (empty($_POST['factoryReset']) != TRUE ) {
+        echo "<br />\n";
+        echo "<table>\n";
+        echo "<tr><th>Factory Reset Config</th></tr>\n";
+        echo "<tr><td>Loading fresh configuration file(s)...</td><tr>\n";
+        echo "</table>\n";
+        unset($_POST);
+        //Reset the config
+        exec('sudo mount -o remount,rw /');                             // Make rootfs writable
+        exec('sudo rm -rf /etc/pistar-css.ini');                        // Delete the Config
+        exec('sudo mount -o remount,ro /');                             // Make rootfs read-only
+        echo '<script type="text/javascript">setTimeout(function() { window.location=window.location;},0);</script>';
+        die();
+    } else {
+        //update ini file, call function
+        update_ini_file($data, $filepath);
+    }
 }
 
-	//this is the function going to update your ini file
-	function update_ini_file($data, $filepath) {
-		$content = "";
+    //this is the function going to update your ini file
+    function update_ini_file($data, $filepath)
+    {
+        $content = "";
 
-		//parse the ini file to get the sections
-		//parse the ini file using default parse_ini_file() PHP function
-		$parsed_ini = parse_ini_file($filepath, true);
+        //parse the ini file to get the sections
+        //parse the ini file using default parse_ini_file() PHP function
+        $parsed_ini = parse_ini_file($filepath, true);
 
-		foreach($data as $section=>$values) {
-			// UnBreak special cases
-			$section = str_replace("_", " ", $section);
-			$section = str_replace("BannerH2", "BannerH1", $section);
-			$content .= "[".$section."]\n";
-			//append the values
-			foreach($values as $key=>$value) {
-				if ($value == '') {
-					$content .= $key."=none\n";
-				}
-				else {
-					$content .= $key."=".$value."\n";
-				}
-			}
-			$content .= "\n";
-		}
+        foreach($data as $section=>$values) {
+            // UnBreak special cases
+            $section = str_replace("_", " ", $section);
+            $section = str_replace("BannerH2", "BannerH1", $section);
+            $content .= "[".$section."]\n";
+            //append the values
+            foreach($values as $key=>$value) {
+                if ($value == '') {
+                    $content .= $key."=none\n";
+                }
+                else {
+                    $content .= $key."=".$value."\n";
+                }
+            }
+            $content .= "\n";
+        }
 
-		//write it into file
-		if (!$handle = fopen($filepath, 'w')) {
-			return false;
-		}
+        //write it into file
+        if (!$handle = fopen($filepath, 'w')) {
+            return false;
+        }
 
-		$success = fwrite($handle, $content);
-		fclose($handle);
+        $success = fwrite($handle, $content);
+        fclose($handle);
 
-		// Updates complete - copy the working file back to the proper location
-		exec('sudo mount -o remount,rw /');                             // Make rootfs writable
-		exec('sudo cp /tmp/bW1kd4jg6b3N0DQo.tmp /etc/pistar-css.ini');  // Move the file back
-		exec('sudo chmod 644 /etc/pistar-css.ini');                     // Set the correct runtime permissions
-		exec('sudo chown root:root /etc/pistar-css.ini');               // Set the owner
-		exec('sudo mount -o remount,ro /');                             // Make rootfs read-only
+        // Updates complete - copy the working file back to the proper location
+        exec('sudo mount -o remount,rw /');                             // Make rootfs writable
+        exec('sudo cp /tmp/bW1kd4jg6b3N0DQo.tmp /etc/pistar-css.ini');  // Move the file back
+        exec('sudo chmod 644 /etc/pistar-css.ini');                     // Set the correct runtime permissions
+        exec('sudo chown root:root /etc/pistar-css.ini');               // Set the owner
+        exec('sudo mount -o remount,ro /');                             // Make rootfs read-only
 
-		return $success;
-	}
+        return $success;
+    }
 
 //parse the ini file using default parse_ini_file() PHP function
 $parsed_ini = parse_ini_file($filepath, true);
@@ -146,37 +160,37 @@ if (isset($parsed_ini['Lookup']['popupWidth']))  { unset($parsed_ini['Lookup']['
 if (isset($parsed_ini['Lookup']['popupHeight'])) { unset($parsed_ini['Lookup']['popupHeight']); }
 
 echo '<form action="" method="post">'."\n";
-	foreach($parsed_ini as $section=>$values) {
-		// keep the section as hidden text so we can update once the form submitted
-		echo "<input type=\"hidden\" value=\"$section\" name=\"$section\" />\n";
-		echo "<table>\n";
-		echo "<tr><th colspan=\"2\">$section</th></tr>\n";
-		// print all other values as input fields, so can edit. 
-		// note the name='' attribute it has both section and key
-		foreach($values as $key=>$value) {
-		  if ( $section == "Lookup" && $key == "Service" ) {
-		    echo "<tr><td align=\"right\" width=\"30%\">$key</td><td align=\"left\">\n";
-		    echo "  <select name=\"{$section}[$key]\" />\n";
-		    if ($value == "RadioID") {
-		      echo "    <option value=\"RadioID\" selected=\"selected\">RadioID Callsign Lookup</option>\n";
-		    } else {
-		      echo "    <option value=\"RadioID\">RadioID Callsign Lookup</option>\n";
-		    }
-		    if ($value == "QRZ") {
-		      echo "    <option value=\"QRZ\" selected=\"selected\">QRZ Callsign Lookup</option>\n";
-		    } else {
-		      echo "    <option value=\"QRZ\">QRZ Callsign Lookup</option>\n";
-		    }
-		    echo "  </select>\n";
-		    echo "</td></tr>\n";
-		  } else {
-		    echo "<tr><td align=\"right\" width=\"30%\">$key</td><td align=\"left\"><input type=\"text\" name=\"{$section}[$key]\" value=\"$value\" /></td></tr>\n";			
-		  }
-		}
-		echo "</table>\n";
-		echo '<input type="submit" value="'.$lang['apply'].'" />'."\n";
-		echo "<br /><br />\n";
-	}
+    foreach($parsed_ini as $section=>$values) {
+        // keep the section as hidden text so we can update once the form submitted
+        echo "<input type=\"hidden\" value=\"$section\" name=\"$section\" />\n";
+        echo "<table>\n";
+        echo "<tr><th colspan=\"2\">$section</th></tr>\n";
+        // print all other values as input fields, so can edit.
+        // note the name='' attribute it has both section and key
+        foreach($values as $key=>$value) {
+          if ( $section == "Lookup" && $key == "Service" ) {
+            echo "<tr><td align=\"right\" width=\"30%\">$key</td><td align=\"left\">\n";
+            echo "  <select name=\"{$section}[$key]\" />\n";
+            if ($value == "RadioID") {
+              echo "    <option value=\"RadioID\" selected=\"selected\">RadioID Callsign Lookup</option>\n";
+            } else {
+              echo "    <option value=\"RadioID\">RadioID Callsign Lookup</option>\n";
+            }
+            if ($value == "QRZ") {
+              echo "    <option value=\"QRZ\" selected=\"selected\">QRZ Callsign Lookup</option>\n";
+            } else {
+              echo "    <option value=\"QRZ\">QRZ Callsign Lookup</option>\n";
+            }
+            echo "  </select>\n";
+            echo "</td></tr>\n";
+          } else {
+            echo "<tr><td align=\"right\" width=\"30%\">$key</td><td align=\"left\"><input type=\"text\" name=\"{$section}[$key]\" value=\"$value\" /></td></tr>\n";
+          }
+        }
+        echo "</table>\n";
+        echo '<input type="submit" value="'.$lang['apply'].'" />'."\n";
+        echo "<br /><br />\n";
+    }
 echo "</form>";
 echo "<br />\n";
 echo 'if you took it all too far and now it makes you feel sick, click below to reset the changes made on this page, this will ONLY reset the CSS settings above and will not change any other settings or configuration.'."\n";
@@ -196,3 +210,4 @@ Get your copy of Pi-Star from <a style="color: #ffffff;" href="http://www.pistar
 </div>
 </body>
 </html>
+

@@ -1,4 +1,13 @@
 <?php
+/**
+ * Raw text editor for /etc/dmrgateway.
+ *
+ * Companion to edit_dmrgateway.php — same target file, but this view
+ * exposes the entire INI as a single textarea so the operator can
+ * make edits the structured form doesn't cover. POST data is staged
+ * to /tmp/<obfuscated>.tmp then sudo-copied back to /etc/dmrgateway.
+ * Restarts BOTH mmdvmhost.service AND dmrgateway.service after save.
+ */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setSecurityHeaders();
 
@@ -50,10 +59,10 @@ if(isset($_POST['data'])) {
         exec('sudo chmod 644 /etc/dmrgateway');
         exec('sudo chown root:root /etc/dmrgateway');
         exec('sudo mount -o remount,ro /');
-  
+
         // Reload the affected daemon
-	exec('sudo systemctl restart mmdvmhost.service');		    // Reload MMDVMHost
-	exec('sudo systemctl restart dmrgateway.service');		    // Reload DMRGateway
+    exec('sudo systemctl restart mmdvmhost.service');            // Reload MMDVMHost
+    exec('sudo systemctl restart dmrgateway.service');            // Reload DMRGateway
 
         // Re-open the file and read it
         $fh = fopen($filepath, 'r');
@@ -89,3 +98,4 @@ Get your copy of Pi-Star from <a style="color: #ffffff;" href="http://www.pistar
 </div>
 </body>
 </html>
+
