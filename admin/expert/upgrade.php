@@ -8,7 +8,15 @@
  * Requires an explicit POST confirmation field before kicking off.
  */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
+require_once($_SERVER['DOCUMENT_ROOT'].'/config/csrf.php');
 setSecurityHeaders();
+
+// CSRF protection — see config/csrf.php for the full rationale.
+// Critical here: line 29 below kicks off `sudo pistar-upgrade`
+// the moment a `confirm_update` POST lands. csrf_verify() MUST
+// run before that, so a hostile cross-site POST can never start
+// a long-running privileged upgrade on the device.
+csrf_verify();
 
 // Load the language support
 require_once('../config/language.php');
@@ -31,7 +39,10 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/upgrade.php") {
 
   // Sanity Check Passed.
   header('Cache-Control: no-cache');
-  session_start();
+  // session_start() is no longer called here — csrf_verify() at
+  // the top already started the session via csrf_session_start().
+  // The existing $_SESSION['update_offset'] log-tail logic below
+  // works unchanged against the already-active session.
 
   // Initialize session offset only if upgrade has been confirmed
   if (!isset($_GET['ajax']) && !empty($_POST) && isset($_POST['confirm_update'])) {
@@ -113,6 +124,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/upgrade.php") {
   </table>
 <?php } else { ?>
   <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post">
+  <?php csrf_field(); ?>
   <table width="100%">
     <tr>
       <th>Upgrade</th>
