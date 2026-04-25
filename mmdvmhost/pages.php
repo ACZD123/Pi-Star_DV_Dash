@@ -66,7 +66,7 @@ function skyper($message, $pocsagric) {
       $skyperMsgNr = ord($messageTextArray[1]) - 32;
       unset($messageTextArray[1]);
     }
-    
+
     if (count($messageTextArray) >= 1) {                              // Check to see if there is a message to decode
       $output = "[Skyper Rubric:$skyperRubric Msg:$skyperMsgNr] ".un_rot(implode($messageTextArray));
     }
@@ -122,7 +122,7 @@ function skyper($message, $pocsagric) {
       if (isset($pocsag_timeslot)) { $pocsag_timeslot = htmlspecialchars($pocsag_timeslot, ENT_QUOTES, 'UTF-8'); }
       if (isset($pocsag_ric)) { $pocsag_ric = htmlspecialchars($pocsag_ric, ENT_QUOTES, 'UTF-8'); }
       if (isset($pocsag_msg)) { $pocsag_msg = htmlspecialchars($pocsag_msg, ENT_QUOTES, 'UTF-8'); }
-      
+
 ?>
 
   <tr>

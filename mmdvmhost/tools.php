@@ -52,15 +52,15 @@ function isProcessRunning($processName, $full = false, $refresh = false) {
   return false;
 }
 
-function createConfigLines() { 
+function createConfigLines() {
 	$out ="";
-	foreach($_GET as $key=>$val) { 
+	foreach($_GET as $key=>$val) {
 		if($key != "cmd") {
 			$out .= "define(\"$key\", \"$val\");"."\n";
 		}
 	}
 	return $out;
-} 
+}
 
 function getSize($filesize, $precision = 2) {
 	$units = array('', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y');
@@ -80,7 +80,7 @@ function checkSetup() {
 ?>
 <div class="alert alert-danger" role="alert">You are using an old config.php. Please configure your Dashboard by calling <a href="setup.php">setup.php</a>!</div>
 <?php
-		
+
 		} else {
 		if (file_exists ("setup.php")) {
 	?>

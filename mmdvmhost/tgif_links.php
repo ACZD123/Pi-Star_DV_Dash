@@ -61,20 +61,20 @@ if ( $testMMDVModeDMR == 1 ) {
     $jsonContext = stream_context_create(array('http'=>array('timeout' => 2, 'header' => 'User-Agent: Pi-Star Dashboard for '.$dmrID) )); // Add Timout and User Agent to include DMRID
     $json_data = file_get_contents("http://tgif.network:5040/api/sessions", false, $jsonContext);
     $json = json_decode($json_data, false);
-  
+
     // Work out what session number we are using
     foreach($json as $key => $jsons) {
       foreach($jsons as $key => $value) {
         if ($json->sessions[$key]->repeater_id == $dmrID) { $session_nr = $key; }
       }
     }
-  
+
     // Pull the information from JSON
     if (isset($session_nr)) {
       $repeaterid = $json->sessions[$session_nr]->repeater_id;
       if ($json->sessions[$session_nr]->tg0 == "4000") { $slot1tg = "None"; } else { $slot1tg = "TG".$json->sessions[$session_nr]->tg0; }
       if ($json->sessions[$session_nr]->tg  == "4000") { $slot2tg = "None"; } else { $slot2tg = "TG".$json->sessions[$session_nr]->tg; }
-  
+
       echo '<b>Active TGIF Connections</b>
       <table>
         <tr>
@@ -83,7 +83,7 @@ if ( $testMMDVModeDMR == 1 ) {
           <th style="width:25%;"><a class=tooltip href="#">Slot1 TG<span><b>TG linked to Slot 1</b></span></a></th>
           <th><a class=tooltip href="#">Slot2 TG<span><b>TG linked to Slot 2</b></span></a></th>
         </tr>'."\n";
-  
+
       echo '    <tr>'."\n";
       echo '      <td>tgif.network</td>';
       echo '<td>'.$repeaterid.'</td>';

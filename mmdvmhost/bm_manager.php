@@ -85,7 +85,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/index.php") { // Stop this working outside o
           if ( (!isset($_POST["dropDyn"])) && (!isset($_POST["dropQso"])) && isset($targetTG) && $_POST["TGmgr"] == "ADD" ) {
             $postDataTG = array(
               'slot' => $targetSlot,
-              'group' => $targetTG              
+              'group' => $targetTG
             );
             $postData = json_encode($postDataTG);
             $postHeaders[] = 'Content-Length: '.strlen($postData);

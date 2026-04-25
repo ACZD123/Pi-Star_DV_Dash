@@ -477,7 +477,7 @@ function getDVModemTCXOFreq() {
 // 00000000001111111111222222222233333333334444444444555555555566666666667777777777888888888899999999990000000000111111111122
 // 01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901
 // M: 2000-00-00 00:00:00.000 Mode set to D-Star
-// M: 2000-00-00 00:00:00.000 D-Star, received RF header from M1ABC   /ABCD to CQCQCQ  
+// M: 2000-00-00 00:00:00.000 D-Star, received RF header from M1ABC   /ABCD to CQCQCQ
 // M: 2000-00-00 00:00:00.000 D-Star, received RF end of transmission from M1ABC   /ABCD to CQCQCQ  , 00.0 seconds, BER: 0.0%, RSSI: -43/-43/-43 dBm
 // M: 2000-00-00 00:00:00.000 D-Star, received network header from M1ABC   /ABCD to CQCQCQ   via REF000 A
 // M: 2000-00-00 00:00:00.000 D-Star, received network end of transmission from M1ABC   /ABCD to CQCQCQ  , 0.0 seconds, 0% packet loss, BER: 0.0%
@@ -710,7 +710,7 @@ function getHeardList($logLines) {
 		$target = trim(substr($logLine, strpos($logLine, "to") + 3));
 		// Handle more verbose logging from MMDVMHost
                 if (strpos($target,",") !== 'false') { $target = explode(",", $target)[0]; }
-		
+
 		$source = "RF";
 		if (strpos($logLine,"network") > 0 || strpos($logLine,"POCSAG") > 0) {
 			$source = "Net";
@@ -807,7 +807,7 @@ function getActualMode($metaLastHeard, $mmdvmconfigs) {
         $local_tz = new DateTimeZone(date_default_timezone_get ());
         $listElem = $metaLastHeard[0];
         $timestamp = new DateTime($listElem[0], $utc_tz);
-        $timestamp->setTimeZone($local_tz); 
+        $timestamp->setTimeZone($local_tz);
         $mode = $listElem[1];
 	if (startsWith($mode, "DMR")) {
 		$mode = "DMR";
@@ -931,7 +931,7 @@ function getDSTARLinks() {
 				$linkDest	= $linx[4][0];
 				$linkDir	= $linx[5][0];
 			}
-// Dongle-Link, sample: 
+// Dongle-Link, sample:
 // 2011-09-24 07:26:59: DPlus link - Type: Dongle User: DC1PIA	Dir: Incoming
 // 2012-03-14 21:32:18: DPlus link - Type: Dongle User: DC1PIA Dir: Incoming
 			if(preg_match_all('/^(.{19}).*(D[A-Za-z]*).*Type: ([A-Za-z]*).*User: (.{6,8}).*Dir: (.*)$/',$linkLine,$linx) > 0){
@@ -1025,7 +1025,7 @@ function getActualLink($logLines, $mode) {
 	// M: 0000-00-00 00:00:00.000 Opening YSF network connection
 	// M: 0000-00-00 00:00:00.000 Automatic (re-)connection to 16710 - "GB SOUTH WEST   "
 	// M: 0000-00-00 00:00:00.000 Automatic (re-)connection to FCS00290
-	// M: 0000-00-00 00:00:00.000 Linked to GB SOUTH WEST   
+	// M: 0000-00-00 00:00:00.000 Linked to GB SOUTH WEST
 	// M: 0000-00-00 00:00:00.000 Linked to FCS002-90
 	// M: 0000-00-00 00:00:00.000 Disconnect via DTMF has been requested by M1ABC
 	// M: 0000-00-00 00:00:00.000 Connect to 00003 - "YSF2NXDN        " has been requested by M1ABC
