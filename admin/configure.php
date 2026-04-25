@@ -3799,16 +3799,25 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
                 error_log("Pi-Star configure.php: cannot read $cfgPath; dashboard PHP timezone not updated");
             } else {
                 $cfgOriginal = file_get_contents($cfgPath);
+                $cfgReplaceCount = 0;
                 $cfgRewritten = preg_replace(
                     '/date_default_timezone_set\s*\([^)]*\)\s*;/',
                     "date_default_timezone_set('" . $tz . "');",
                     $cfgOriginal,
-                    1
+                    1,
+                    $cfgReplaceCount
                 );
                 if ($cfgRewritten === null) {
                     error_log("Pi-Star configure.php: preg_replace error rewriting $cfgPath timezone");
-                } elseif ($cfgRewritten === $cfgOriginal) {
+                } elseif ($cfgReplaceCount === 0) {
+                    // Regex didn't match: the file shape changed and our
+                    // rewriter no longer recognises it. Worth logging.
                     error_log("Pi-Star configure.php: no date_default_timezone_set() call found in $cfgPath; dashboard PHP timezone not updated");
+                } elseif ($cfgRewritten === $cfgOriginal) {
+                    // Match found but the replacement is identical to
+                    // the existing value — user submitted the form
+                    // without changing timezone. Benign no-op; no need
+                    // to install or log.
                 } else {
                     $cfgTmp = tempnam('/tmp', 'pistar_cfg_');
                     file_put_contents($cfgTmp, $cfgRewritten);
