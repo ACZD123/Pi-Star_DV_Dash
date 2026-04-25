@@ -13,6 +13,7 @@
  * PHP_SELF check at the top.
  */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
+require_once($_SERVER['DOCUMENT_ROOT'].'/config/csrf.php');
 setSecurityHeaders();
 
 // Load the language support
@@ -62,7 +63,15 @@ if ($_SERVER["PHP_SELF"] == "/admin/power.php") {
   </p>
   </div>
   <div class="contentwide">
-<?php if (!empty($_POST)) { ?>
+<?php if (!empty($_POST)) {
+    // Reject any POST that doesn't carry a valid session-scoped CSRF
+    // token. Without this, a hostile page open in another tab could
+    // POST action=reboot or action=shutdown to this endpoint and the
+    // browser would attach the cached basic-auth credential — taking
+    // the device down at attacker's whim. csrf_verify() emits 403 +
+    // exit() on mismatch.
+    csrf_verify();
+?>
   <table width="100%">
   <tr><th colspan="2"><?php echo $lang['power'];?></th></tr>
   <?php
@@ -97,6 +106,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/power.php") {
   </table>
 <?php } else { ?>
   <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post" onsubmit="return confirm('Are you sure?');">
+  <?php csrf_field(); ?>
   <table width="100%">
   <tr>
     <th colspan="2"><?php echo $lang['power'];?></th>
