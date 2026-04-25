@@ -1,4 +1,26 @@
 <?php
+/**
+ * Modem calibration UI.
+ *
+ * Three responsibilities, all served from this single endpoint:
+ *   1. /admin/calibration.php?action=start  — kicks off a netcat
+ *      listener piped through `sudo -i script` running
+ *      /usr/local/sbin/pistar-mmdvmcal; output streams into
+ *      /tmp/pi-star_mmdvmcal.log.
+ *   2. /admin/calibration.php?cmd=<single-letter>&param=<value> —
+ *      sends commands to the running mmdvmcal process via UDP
+ *      socket on 127.0.0.1:33273 (mmdvmcal's IPC port).
+ *   3. /admin/calibration.php?ajax — tails /tmp/pi-star_mmdvmcal.log
+ *      using a session-stored byte offset so the browser can render
+ *      the live calibration output and the BER chart.
+ *
+ *   4. /admin/calibration.php?action=saveoffset&param=<int> — runs
+ *      sudo sed against /etc/mmdvmhost to persist the calibrated
+ *      RX/TX offset (intval()-validated).
+ *
+ * The form itself is mostly client-side JS (jQuery + plotly) that
+ * sends commands and renders the rolling Bit Error Rate plot.
+ */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setSecurityHeaders();
 
@@ -57,13 +79,13 @@ if ($_SERVER["PHP_SELF"] == "/admin/calibration.php") {
       $_SESSION['mmdvmcal_offset'] = 0;
     }
   }
-  
+
   if (isset($_GET['ajax'])) {
     //session_start();
     if (!file_exists('/tmp/pi-star_mmdvmcal.log')) {
       exit();
     }
-    
+
     $handle = fopen('/tmp/pi-star_mmdvmcal.log', 'rb');
     if (isset($_SESSION['mmdvmcal_offset'])) {
       fseek($handle, 0, SEEK_END);
@@ -76,13 +98,13 @@ if ($_SERVER["PHP_SELF"] == "/admin/calibration.php") {
     else {
       fseek($handle, 0, SEEK_END);
       $_SESSION['mmdvmcal_offset'] = ftell($handle);
-      } 
+      }
   exit();
   }
 
   $RXFrequency = exec('grep "RXFrequency" /etc/mmdvmhost | awk -F "=" \'{print $2}\'');
   $RXOffset = exec('grep "RXOffset" /etc/mmdvmhost | awk -F "=" \'{print $2}\'');
-  
+
 ?>
   <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -108,7 +130,8 @@ if ($_SERVER["PHP_SELF"] == "/admin/calibration.php") {
 
     var rxoffset = ~~'<?php echo $RXOffset; ?>';
 
-    function sendaction(action='', param='') {
+    function sendaction(action='', param='')
+    {
       if (action === 'start') { document.getElementById("btnStart").disabled = true; }
       if (action === 'saveoffset') { rxoffset = ~~param }
       $.ajax({
@@ -123,10 +146,11 @@ if ($_SERVER["PHP_SELF"] == "/admin/calibration.php") {
       });
       return false;
     }
-    
+
     var sendcmd_lock=false;
 
-    function sendcmd(cmd='', param='') {
+    function sendcmd(cmd='', param='')
+    {
       if (sendcmd_lock) { return false; }
       if (param !== '') { sendcmd_lock = true; } //if we have param, lock to prevent cmd overlap while waiting param
       $.ajax({
@@ -142,7 +166,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/calibration.php") {
       });
       return false;
     }
-    
+
     var cnt=0; tcnt=0;
     var cfrms=0; cbits=0, cberr=0;
     var tfrms=0; tbits=0, tberr=0;
@@ -159,7 +183,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/calibration.php") {
           if (isScrolledToBottom)
             objDiv.scrollTop = objDiv.scrollHeight;
 <?php } ?>
-          
+
           if (("\n"+data).includes("Version:")) {
             setTimeout(function(){ sendcmd('e', (~~'<?php echo $RXFrequency; ?>'+rxoffset).toString() ); }, 1000);
           }
@@ -213,7 +237,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/calibration.php") {
             $('#ledP25').attr("src", 'images/20red.png');
             $('#ledNXDN').attr("src", 'images/20green.png');
           }
-          
+
           if (data.includes("voice end received,")) {
             eot=true;
           }
@@ -288,7 +312,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/calibration.php") {
   <table width="100%">
   <tr><th>Calibration Tool</th></tr>
   <tr><td align="left">
-  
+
 <table width="800" border="0" cellspacing="0" cellpadding="5">
   <tr>
     <td align="center" valign="middle"><table border="0" cellspacing="0" cellpadding="5">
@@ -391,7 +415,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/calibration.php") {
       </tr>
     </table></td>
   </tr>
-</table>  
+</table>
 
   </td></tr>
   <tr><td align="left">
@@ -424,4 +448,3 @@ if ($_SERVER["PHP_SELF"] == "/admin/calibration.php") {
 
 <?php
 }
-?>

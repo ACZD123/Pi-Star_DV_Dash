@@ -1,4 +1,15 @@
 <?php
+/**
+ * System info — RAM/swap, partition usage, and a long table of
+ * installed binary versions.
+ *
+ * Self-contained: no AJAX, no privileged calls. Reads /proc/meminfo,
+ * shells out to `df --block-size=1` to enumerate partitions, then
+ * runs each /usr/local/bin/<Gateway> with `-v` to print version
+ * banners (MMDVMHost, DMRGateway, DMR2YSF/NXDN, YSFGateway,
+ * DGIdGateway, YSF2DMR/P25/NXDN, P25Gateway, NXDNGateway,
+ * M17Gateway, DAPNETGateway).
+ */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setSecurityHeaders();
 
@@ -14,7 +25,8 @@ require_once('config/version.php');
 // Retrieve server information
 $system = system_information();
 
-function system_information() {
+function system_information()
+{
     @list($system, $host, $kernel) = preg_split('/[\s,]+/', php_uname('a'), 5);
     $meminfo = false;
     if (@is_readable('/proc/meminfo')) {
@@ -32,8 +44,9 @@ function system_information() {
                  'partitions' => disk_list()
                  );
 }
-  
-function disk_list() {
+
+function disk_list()
+{
     $partitions = array();
     // Fetch partition information from df command
     // I would have used disk_free_space() and disk_total_space() here but
@@ -46,7 +59,7 @@ function disk_list() {
             $column = trim($column);
             if($column != '') $columns[] = $column;
         }
-        
+
         // Only process 6 column rows
         // (This has the bonus of ignoring the first row which is 7)
         if(count($columns) == 6) {
@@ -70,7 +83,8 @@ function disk_list() {
     return $partitions;
 }
 
-function formatSize( $bytes ) {
+function formatSize( $bytes )
+{
     $types = array( 'B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB' );
     for( $i = 0; $bytes >= 1024 && $i < ( count( $types ) -1 ); $bytes /= 1024, $i++ );
     return( round( $bytes, 2 ) . " " . $types[$i] );
@@ -96,7 +110,7 @@ function formatSize( $bytes ) {
     <link rel="stylesheet" type="text/css" href="css/pistar-css.php" />
     <script type="text/javascript" src="/jquery.min.js"></script>
     <script type="text/javascript" src="/jquery-timing.min.js"></script>
-    <style>  
+    <style>
     .progress .bar + .bar {
       -webkit-box-shadow: inset 1px 0 0 rgba(0, 0, 0, 0.15), inset 0 -1px 0 rgba(0, 0, 0, 0.15);
       -moz-box-shadow: inset 1px 0 0 rgba(0, 0, 0, 0.15), inset 0 -1px 0 rgba(0, 0, 0, 0.15);
@@ -148,7 +162,7 @@ if (count($system['partitions']) > 0) {
             $diskTotal = $fs['Size']['value'];
             $diskUsed = $fs['Used']['value'];
             $diskPercent = sprintf('%.2f',($diskUsed / $diskTotal) * 100);
-                        
+
             echo "  <tr><td align=\"left\">".$fs['Partition']['text']."</td><td align=\"left\"><div class='progress progress-info' style='margin-bottom: 0;'><div class='bar' style='width: ".$diskPercent."%;'>Used&nbsp;".$diskPercent."%</div></div>";
             echo "  <b>Total:</b> ".formatSize($diskTotal)."<b> Used:</b> ".formatSize($diskUsed)."<b> Free:</b> ".formatSize($diskFree)."</td></tr>\n";
         }
@@ -209,7 +223,7 @@ if (is_executable('/usr/local/bin/DAPNETGateway')) {
     echo "  <tr><td align=\"left\">DAPNETGateway</td><td align=\"left\">".$DAPNETGateway_Ver."</td></tr>\n";
 }
 ?>
-  </table>  
+  </table>
   </div>
   <div class="footer">
   Pi-Star web config, &copy; Andy Taylor (MW0MWZ) 2014-<?php echo date("Y"); ?>.<br />
@@ -220,3 +234,4 @@ if (is_executable('/usr/local/bin/DAPNETGateway')) {
   </div>
   </body>
   </html>
+

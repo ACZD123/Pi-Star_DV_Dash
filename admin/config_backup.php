@@ -1,4 +1,33 @@
 <?php
+/**
+ * Configuration backup & restore.
+ *
+ * Two POST actions:
+ *   - download: zips up every /etc/<gateway>* config file plus a
+ *     handful of dashboard / WiFi / hostnaming files into
+ *     /tmp/config_backup.zip and sends it as a download.
+ *   - restore: accepts a ZIP upload, extracts it to
+ *     /tmp/config_restore/, stops every DV service, copies the
+ *     extracted files back to /etc/, and restarts the services.
+ *
+ * NOTE for the security pass: this file is the highest-risk surface
+ * in the dashboard. Concerns flagged by the audit:
+ *   - ZIP extraction uses ZipArchive::extractTo() with no zip-slip
+ *     protection — a crafted archive can place files outside
+ *     /tmp/config_restore/.
+ *   - After extraction the code does `sudo mv -v -f
+ *     /tmp/config_restore/* /etc/` which blindly trusts the archive
+ *     contents.
+ *   - Timezone is grep'd out of the restored config.php and
+ *     interpolated into `sudo timedatectl set-timezone <tz>` — a
+ *     malicious config.php in the archive can hijack root.
+ *   - Same pattern around the ircDDBGateway remote-control password
+ *     interpolated into a sed command.
+ *   - File type check on upload uses the client-supplied MIME type.
+ *
+ * No setSecurityHeaders() call here either. All flagged for the
+ * security pass; no fixes in this commit.
+ */
 // Load the language support
 require_once('config/language.php');
 // Load the Pi-Star Release file
@@ -54,45 +83,45 @@ if ($_SERVER["PHP_SELF"] == "/admin/config_backup.php") {
           $output = "Finding config files to be backed up\n";
           $backupDir = "/tmp/config_backup";
           $backupZip = "/tmp/config_backup.zip";
-	  $hostNameInfo = exec('cat /etc/hostname');
-          
+      $hostNameInfo = exec('cat /etc/hostname');
+
           $output .= shell_exec("sudo rm -rf $backupZip 2>&1");
           $output .= shell_exec("sudo rm -rf $backupDir 2>&1");
           $output .= shell_exec("sudo mkdir $backupDir 2>&1");
-	  if (shell_exec('cat /etc/dhcpcd.conf | grep "static ip_address" | grep -v "#"')) {
-		  $output .= shell_exec("sudo cp /etc/dhcpcd.conf $backupDir 2>&1");
-	  }
+      if (shell_exec('cat /etc/dhcpcd.conf | grep "static ip_address" | grep -v "#"')) {
+          $output .= shell_exec("sudo cp /etc/dhcpcd.conf $backupDir 2>&1");
+      }
           $output .= shell_exec("sudo cp /etc/wpa_supplicant/wpa_supplicant.conf $backupDir 2>&1");
           $output .= shell_exec("sudo cp /etc/ircddbgateway $backupDir 2>&1");
           $output .= shell_exec("sudo cp /etc/mmdvmhost $backupDir 2>&1");
           $output .= shell_exec("sudo cp /etc/dstarrepeater $backupDir 2>&1");
-	  $output .= shell_exec("sudo cp /etc/dapnetgateway $backupDir 2>&1");
+      $output .= shell_exec("sudo cp /etc/dapnetgateway $backupDir 2>&1");
           $output .= shell_exec("sudo cp /etc/p25gateway $backupDir 2>&1");
-	  $output .= shell_exec("sudo cp /etc/m17gateway $backupDir 2>&1");
+      $output .= shell_exec("sudo cp /etc/m17gateway $backupDir 2>&1");
           $output .= shell_exec("sudo cp /etc/ysfgateway $backupDir 2>&1");
-	  $output .= shell_exec("sudo cp /etc/ysf2dmr $backupDir 2>&1");
-	  $output .= shell_exec("sudo cp /etc/dgidgateway $backupDir 2>&1");
-	  $output .= shell_exec("sudo cp /etc/nxdngateway $backupDir 2>&1");
-	  $output .= shell_exec("sudo cp /etc/dmrgateway $backupDir 2>&1");
-	  $output .= shell_exec("sudo cp /etc/mobilegps $backupDir 2>&1");
+      $output .= shell_exec("sudo cp /etc/ysf2dmr $backupDir 2>&1");
+      $output .= shell_exec("sudo cp /etc/dgidgateway $backupDir 2>&1");
+      $output .= shell_exec("sudo cp /etc/nxdngateway $backupDir 2>&1");
+      $output .= shell_exec("sudo cp /etc/dmrgateway $backupDir 2>&1");
+      $output .= shell_exec("sudo cp /etc/mobilegps $backupDir 2>&1");
           $output .= shell_exec("sudo cp /etc/starnetserver $backupDir 2>&1");
           $output .= shell_exec("sudo cp /etc/timeserver $backupDir 2>&1");
           $output .= shell_exec("sudo cp /etc/dstar-radio.* $backupDir 2>&1");
-	  $output .= shell_exec("sudo cp /etc/pistar-remote $backupDir 2>&1");
-	  $output .= shell_exec("sudo cp /etc/hosts $backupDir 2>&1");
-	  $output .= shell_exec("sudo cp /etc/hostname $backupDir 2>&1");
-	  $output .= shell_exec("sudo cp /etc/bmapi.key $backupDir 2>&1");
-	  $output .= shell_exec("sudo cp /etc/dapnetapi.key $backupDir 2>&1");
-	  $output .= shell_exec("sudo cp /etc/pistar-css.ini $backupDir 2>&1");
-	  $output .= shell_exec("sudo cp /usr/local/etc/RSSI.dat $backupDir 2>&1");
-	  $output .= shell_exec("sudo cp /var/www/dashboard/config/ircddblocal.php $backupDir 2>&1");
-	  $output .= shell_exec("sudo cp /var/www/dashboard/config/config.php $backupDir 2>&1");
+      $output .= shell_exec("sudo cp /etc/pistar-remote $backupDir 2>&1");
+      $output .= shell_exec("sudo cp /etc/hosts $backupDir 2>&1");
+      $output .= shell_exec("sudo cp /etc/hostname $backupDir 2>&1");
+      $output .= shell_exec("sudo cp /etc/bmapi.key $backupDir 2>&1");
+      $output .= shell_exec("sudo cp /etc/dapnetapi.key $backupDir 2>&1");
+      $output .= shell_exec("sudo cp /etc/pistar-css.ini $backupDir 2>&1");
+      $output .= shell_exec("sudo cp /usr/local/etc/RSSI.dat $backupDir 2>&1");
+      $output .= shell_exec("sudo cp /var/www/dashboard/config/ircddblocal.php $backupDir 2>&1");
+      $output .= shell_exec("sudo cp /var/www/dashboard/config/config.php $backupDir 2>&1");
           $output .= "Compressing backup files\n";
           $output .= shell_exec("sudo zip -j $backupZip $backupDir/* 2>&1");
           $output .= "Starting download\n";
-          
+
           echo "<tr><td align=\"left\"><pre>$output</pre></td></tr>\n";
-          
+
           if (file_exists($backupZip)) {
             $utc_time = gmdate('Y-m-d H:i:s');
             $utc_tz =  new DateTimeZone('UTC');
@@ -102,12 +131,12 @@ if ($_SERVER["PHP_SELF"] == "/admin/config_backup.php") {
             $local_time = $dt->format('Y-M-d');
             header('Content-Description: File Transfer');
             header('Content-Type: application/octet-stream');
-	    if ($hostNameInfo != "pi-star") {
-		    header('Content-Disposition: attachment; filename="'.basename("Pi-Star_Config_".$hostNameInfo."_".$local_time.".zip").'"');
-	    }
-	    else {
-		    header('Content-Disposition: attachment; filename="'.basename("Pi-Star_Config_$local_time.zip").'"');
-	    }
+        if ($hostNameInfo != "pi-star") {
+            header('Content-Disposition: attachment; filename="'.basename("Pi-Star_Config_".$hostNameInfo."_".$local_time.".zip").'"');
+        }
+        else {
+            header('Content-Disposition: attachment; filename="'.basename("Pi-Star_Config_$local_time.zip").'"');
+        }
             header('Content-Transfer-Encoding: binary');
             header('Expires: 0');
             header('Cache-Control: must-revalidate');
@@ -129,108 +158,108 @@ if ($_SERVER["PHP_SELF"] == "/admin/config_backup.php") {
           shell_exec("mkdir $target_dir 2>&1");
           if($_FILES["fileToUpload"]["name"]) {
                   $filename = $_FILES["fileToUpload"]["name"];
-	  	  $source = $_FILES["fileToUpload"]["tmp_name"];
-	          $type = $_FILES["fileToUpload"]["type"];
-	
-	          $name = explode(".", $filename);
-	          $accepted_types = array('application/zip', 'application/x-zip-compressed', 'multipart/x-zip', 'application/x-compressed');
-	          foreach($accepted_types as $mime_type) {
-		          if($mime_type == $type) {
-			          $okay = true;
-			          break;
-			  }
-		  }
-	  }
-		$continue = strtolower($name[1]) == 'zip' ? true : false;
-	        if(!$continue) {
-		        $output .= "The file you are trying to upload is not a .zip file. Please try again.\n";
-	        }
-		$target_path = $target_dir.$filename;
-          
-		if(move_uploaded_file($source, $target_path)) {
-			$zip = new ZipArchive();
-		        $x = $zip->open($target_path);
-		        if ($x === true) {
-			        $zip->extractTo($target_dir); // change this to the correct site path
-			        $zip->close();
-			        unlink($target_path);
-		        }
-		        $output .= "Your .zip file was uploaded and unpacked.\n";
-			$output .= "Stopping Services.\n";
-			
-			// Stop the DV Services
-			shell_exec('sudo systemctl stop cron.service 2>&1');		//Cron
-			shell_exec('sudo systemctl stop dstarrepeater.service 2>&1');	//D-Star Radio Service
-			shell_exec('sudo systemctl stop mmdvmhost.service 2>&1');	//MMDVMHost Radio Service
-			shell_exec('sudo systemctl stop ircddbgateway.service 2>&1');	//ircDDBGateway Service
-			shell_exec('sudo systemctl stop timeserver.service 2>&1');	//Time Server Service
-			shell_exec('sudo systemctl stop pistar-watchdog.service 2>&1');	//PiStar-Watchdog Service
-			shell_exec('sudo systemctl stop pistar-remote.service 2>&1');	//PiStar-Remote Service
-			shell_exec('sudo systemctl stop ysfgateway.service 2>&1');	//YSFGateway
-			shell_exec('sudo systemctl stop ysf2dmr.service 2>&1');		//YSF2DMR
-			shell_exec('sudo systemctl stop p25gateway.service 2>&1');	//P25Gateway
-			shell_exec('sudo systemctl stop nxdngateway.service 2>&1');	//NXDNGateway
-			shell_exec('sudo systemctl stop m17gateway.service 2>&1');	//M17Gateway
-			shell_exec('sudo systemctl stop dapnetgateway.service 2>&1');	//DAPNETGateway
-			shell_exec('sudo systemctl stop mobilegps.service 2>&1');	//MobileGPS
-			
-			// Make the disk Writable
-			shell_exec('sudo mount -o remount,rw / 2>&1');
-			
-			// Overwrite the configs
-			$output .= "Writing new Config\n";
-			$output .= shell_exec("sudo rm -f /etc/dstar-radio.* 2>&1")."\n";
-			$output .= shell_exec("sudo mv -f /tmp/config_restore/RSSI.dat /usr/local/etc/ 2>&1")."\n";
-			$output .= shell_exec("sudo mv -f /tmp/config_restore/ircddblocal.php /var/www/dashboard/config/ 2>&1")."\n";
-			$output .= shell_exec("sudo mv -f /tmp/config_restore/config.php /var/www/dashboard/config/ 2>&1")."\n";
-			$output .= shell_exec("sudo mv -v -f /tmp/config_restore/wpa_supplicant.conf /etc/wpa_supplicant/ 2>&1")."\n";
-			$output .= shell_exec("sudo mv -v -f /tmp/config_restore/* /etc/ 2>&1")."\n";
-			
-			//Restore the Timezone Config
+            $source = $_FILES["fileToUpload"]["tmp_name"];
+              $type = $_FILES["fileToUpload"]["type"];
+
+              $name = explode(".", $filename);
+              $accepted_types = array('application/zip', 'application/x-zip-compressed', 'multipart/x-zip', 'application/x-compressed');
+              foreach($accepted_types as $mime_type) {
+                  if($mime_type == $type) {
+                      $okay = true;
+                      break;
+              }
+          }
+      }
+        $continue = strtolower($name[1]) == 'zip' ? true : false;
+            if(!$continue) {
+                $output .= "The file you are trying to upload is not a .zip file. Please try again.\n";
+            }
+        $target_path = $target_dir.$filename;
+
+        if(move_uploaded_file($source, $target_path)) {
+            $zip = new ZipArchive();
+                $x = $zip->open($target_path);
+                if ($x === true) {
+                    $zip->extractTo($target_dir); // change this to the correct site path
+                    $zip->close();
+                    unlink($target_path);
+                }
+                $output .= "Your .zip file was uploaded and unpacked.\n";
+            $output .= "Stopping Services.\n";
+
+            // Stop the DV Services
+            shell_exec('sudo systemctl stop cron.service 2>&1');        //Cron
+            shell_exec('sudo systemctl stop dstarrepeater.service 2>&1');    //D-Star Radio Service
+            shell_exec('sudo systemctl stop mmdvmhost.service 2>&1');    //MMDVMHost Radio Service
+            shell_exec('sudo systemctl stop ircddbgateway.service 2>&1');    //ircDDBGateway Service
+            shell_exec('sudo systemctl stop timeserver.service 2>&1');    //Time Server Service
+            shell_exec('sudo systemctl stop pistar-watchdog.service 2>&1');    //PiStar-Watchdog Service
+            shell_exec('sudo systemctl stop pistar-remote.service 2>&1');    //PiStar-Remote Service
+            shell_exec('sudo systemctl stop ysfgateway.service 2>&1');    //YSFGateway
+            shell_exec('sudo systemctl stop ysf2dmr.service 2>&1');        //YSF2DMR
+            shell_exec('sudo systemctl stop p25gateway.service 2>&1');    //P25Gateway
+            shell_exec('sudo systemctl stop nxdngateway.service 2>&1');    //NXDNGateway
+            shell_exec('sudo systemctl stop m17gateway.service 2>&1');    //M17Gateway
+            shell_exec('sudo systemctl stop dapnetgateway.service 2>&1');    //DAPNETGateway
+            shell_exec('sudo systemctl stop mobilegps.service 2>&1');    //MobileGPS
+
+            // Make the disk Writable
+            shell_exec('sudo mount -o remount,rw / 2>&1');
+
+            // Overwrite the configs
+            $output .= "Writing new Config\n";
+            $output .= shell_exec("sudo rm -f /etc/dstar-radio.* 2>&1")."\n";
+            $output .= shell_exec("sudo mv -f /tmp/config_restore/RSSI.dat /usr/local/etc/ 2>&1")."\n";
+            $output .= shell_exec("sudo mv -f /tmp/config_restore/ircddblocal.php /var/www/dashboard/config/ 2>&1")."\n";
+            $output .= shell_exec("sudo mv -f /tmp/config_restore/config.php /var/www/dashboard/config/ 2>&1")."\n";
+            $output .= shell_exec("sudo mv -v -f /tmp/config_restore/wpa_supplicant.conf /etc/wpa_supplicant/ 2>&1")."\n";
+            $output .= shell_exec("sudo mv -v -f /tmp/config_restore/* /etc/ 2>&1")."\n";
+
+            //Restore the Timezone Config
                         $timeZone = shell_exec('grep date /var/www/dashboard/config/config.php | grep -o "\'.*\'" | sed "s/\'//g"');
                         $timeZone = preg_replace( "/\r|\n/", "", $timeZone);                    //Remove the linebreaks
                         shell_exec('sudo timedatectl set-timezone '.$timeZone.' 2>&1');
-			
-			//Restore ircDDGBateway Link Manager Password
-			$ircRemotePassword = shell_exec('grep remotePassword /etc/ircddbgateway | awk -F\'=\' \'{print $2}\'');
-			shell_exec('sudo sed -i "/password=/c\\password='.$ircRemotePassword.'" /root/.Remote\ Control');
 
-			// Make the disk Read-Only
-			shell_exec('sudo mount -o remount,ro / 2>&1');
-			
-			// Start the services
-			$output .= "Starting Services.\n";
-			shell_exec('sudo systemctl start dstarrepeater.service 2>&1');		//D-Star Radio Service
-			shell_exec('sudo systemctl start mmdvmhost.service 2>&1');		//MMDVMHost Radio Service
-			shell_exec('sudo systemctl start ircddbgateway.service 2>&1');		//ircDDBGateway Service
-			shell_exec('sudo systemctl start timeserver.service 2>&1');		//Time Server Service
-			shell_exec('sudo systemctl start pistar-watchdog.service 2>&1');	//PiStar-Watchdog Service
-			shell_exec('sudo systemctl start pistar-remote.service 2>&1');		//PiStar-Remote Service
-			if (substr(exec('grep "pistar-upnp.service" /etc/crontab | cut -c 1'), 0, 1) !== '#') {
-				shell_exec('sudo systemctl start pistar-upnp.service 2>&1');		//PiStar-UPnP Service
-			}
-			shell_exec('sudo systemctl start ysfgateway.service 2>&1');		//YSFGateway
-			shell_exec('sudo systemctl start ysf2dmr.service 2>&1');		//YSF2DMR
-			shell_exec('sudo systemctl start p25gateway.service 2>&1');		//P25Gateway
-			shell_exec('sudo systemctl start nxdngateway.service 2>&1');		//NXDNGateway
-			shell_exec('sudo systemctl start m17gateway.service 2>&1');		//M17Gateway
-			shell_exec('sudo systemctl start dapnetgateway.service 2>&1');		//DAPNETGateway
-			shell_exec('sudo systemctl start mobilegps.service 2>&1');		//MobileGPS
-			shell_exec('sudo systemctl start cron.service 2>&1');			//Cron
-			
-			// Complete
-			$output .= "Configuration Restore Complete.\n";
-		}
-		else {
-			$output .= "There was a problem with the upload. Please try again.<br />";
-			$output .= "\n".'<button onclick="goBack()">Go Back</button><br />'."\n";
-			$output .= '<script>'."\n";
-			$output .= 'function goBack() {'."\n";
-			$output .= '    window.history.back();'."\n";
-			$output .= '}'."\n";
-			$output .= '</script>'."\n";
-		}
-	  echo "<tr><td align=\"left\"><pre>$output</pre></td></tr>\n";
+            //Restore ircDDGBateway Link Manager Password
+            $ircRemotePassword = shell_exec('grep remotePassword /etc/ircddbgateway | awk -F\'=\' \'{print $2}\'');
+            shell_exec('sudo sed -i "/password=/c\\password='.$ircRemotePassword.'" /root/.Remote\ Control');
+
+            // Make the disk Read-Only
+            shell_exec('sudo mount -o remount,ro / 2>&1');
+
+            // Start the services
+            $output .= "Starting Services.\n";
+            shell_exec('sudo systemctl start dstarrepeater.service 2>&1');        //D-Star Radio Service
+            shell_exec('sudo systemctl start mmdvmhost.service 2>&1');        //MMDVMHost Radio Service
+            shell_exec('sudo systemctl start ircddbgateway.service 2>&1');        //ircDDBGateway Service
+            shell_exec('sudo systemctl start timeserver.service 2>&1');        //Time Server Service
+            shell_exec('sudo systemctl start pistar-watchdog.service 2>&1');    //PiStar-Watchdog Service
+            shell_exec('sudo systemctl start pistar-remote.service 2>&1');        //PiStar-Remote Service
+            if (substr(exec('grep "pistar-upnp.service" /etc/crontab | cut -c 1'), 0, 1) !== '#') {
+                shell_exec('sudo systemctl start pistar-upnp.service 2>&1');        //PiStar-UPnP Service
+            }
+            shell_exec('sudo systemctl start ysfgateway.service 2>&1');        //YSFGateway
+            shell_exec('sudo systemctl start ysf2dmr.service 2>&1');        //YSF2DMR
+            shell_exec('sudo systemctl start p25gateway.service 2>&1');        //P25Gateway
+            shell_exec('sudo systemctl start nxdngateway.service 2>&1');        //NXDNGateway
+            shell_exec('sudo systemctl start m17gateway.service 2>&1');        //M17Gateway
+            shell_exec('sudo systemctl start dapnetgateway.service 2>&1');        //DAPNETGateway
+            shell_exec('sudo systemctl start mobilegps.service 2>&1');        //MobileGPS
+            shell_exec('sudo systemctl start cron.service 2>&1');            //Cron
+
+            // Complete
+            $output .= "Configuration Restore Complete.\n";
+        }
+        else {
+            $output .= "There was a problem with the upload. Please try again.<br />";
+            $output .= "\n".'<button onclick="goBack()">Go Back</button><br />'."\n";
+            $output .= '<script>'."\n";
+            $output .= 'function goBack() {'."\n";
+            $output .= '    window.history.back();'."\n";
+            $output .= '}'."\n";
+            $output .= '</script>'."\n";
+        }
+      echo "<tr><td align=\"left\"><pre>$output</pre></td></tr>\n";
   };
 
   echo "</table>\n";
@@ -242,25 +271,25 @@ if ($_SERVER["PHP_SELF"] == "/admin/config_backup.php") {
   </tr>
   <tr>
     <td align="center" valign="top" width="50%">Download Configuration<br />
-	<button style="border: none; background: none;" name="action" value="download"><img src="/images/download.png" border="0" alt="Download Config" /></button>
+    <button style="border: none; background: none;" name="action" value="download"><img src="/images/download.png" border="0" alt="Download Config" /></button>
     </td>
     <td align="center" valign="top">Restore Configuration<br />
-	<button style="border: none; background: none;" name="action" value="restore"><img src="/images/restore.png" border="0" alt="Restore Config" /></button><br />
-    	<input type="file" name="fileToUpload" id="fileToUpload" />
+    <button style="border: none; background: none;" name="action" value="restore"><img src="/images/restore.png" border="0" alt="Restore Config" /></button><br />
+        <input type="file" name="fileToUpload" id="fileToUpload" />
     </td>
   </tr>
   <tr>
   <td colspan="2" align="justify">
-	  <br />
-	  <b>WARNING:</b><br />
-	  Editing the files outside of Pi-Star *could* have un-desireable side effects.<br />
-	  <br />
-	  This backup and restore tool, will backup your config files to a Zip file, and allow you to restore them later<br />
-	  either to this Pi-Star or another one.<br />
-	  <ul>
-		  <li>System Passwords / Dashboard passwords are NOT backed up / restored.</li>
-		  <li>Wireless Configuration IS backed up and restored</li>
-	  </ul>
+      <br />
+      <b>WARNING:</b><br />
+      Editing the files outside of Pi-Star *could* have un-desireable side effects.<br />
+      <br />
+      This backup and restore tool, will backup your config files to a Zip file, and allow you to restore them later<br />
+      either to this Pi-Star or another one.<br />
+      <ul>
+          <li>System Passwords / Dashboard passwords are NOT backed up / restored.</li>
+          <li>Wireless Configuration IS backed up and restored</li>
+      </ul>
   </td>
   </tr>
   </table>
@@ -278,4 +307,3 @@ if ($_SERVER["PHP_SELF"] == "/admin/config_backup.php") {
   </html>
 <?php
 }
-?>

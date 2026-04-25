@@ -1,4 +1,17 @@
 <?php
+/**
+ * Pi-Star software update runner.
+ *
+ * On confirmed POST, kicks off `sudo /usr/local/sbin/pistar-update`
+ * in the background and tails /var/log/pi-star/pi-star_update.log
+ * via AJAX (jquery-timing $.repeat) — same pattern used by
+ * admin/expert/upgrade.php for pistar-upgrade and
+ * admin/expert/jitter_test.php for pistar-jittertest.
+ *
+ * Forces the locale to a stock C / en_GB.UTF-8 mix for the duration
+ * of the update so any commands the script runs see consistent
+ * formatting (some tools change their output based on locale).
+ */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setSecurityHeaders();
 
@@ -42,13 +55,13 @@ if ($_SERVER["PHP_SELF"] == "/admin/update.php") {
       $_SESSION['update_offset'] = 0;
     }
   }
-  
+
   if (isset($_GET['ajax'])) {
     //session_start();
     if (!file_exists('/var/log/pi-star/pi-star_update.log')) {
       exit();
     }
-    
+
     $handle = fopen('/var/log/pi-star/pi-star_update.log', 'rb');
     if (isset($_SESSION['update_offset'])) {
       fseek($handle, 0, SEEK_END);
@@ -61,10 +74,10 @@ if ($_SERVER["PHP_SELF"] == "/admin/update.php") {
     else {
       fseek($handle, 0, SEEK_END);
       $_SESSION['update_offset'] = ftell($handle);
-      } 
+      }
   exit();
   }
-  
+
 ?>
   <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -167,4 +180,3 @@ if ($_SERVER["PHP_SELF"] == "/admin/update.php") {
 
 <?php
 }
-?>

@@ -1,3 +1,25 @@
+<?php
+/**
+ * Admin sidebar partial — service status grid + D-Star reflector
+ * link/unlink form (when in dstarrepeater mode) + PiStar-Keeper
+ * logbook panel.
+ *
+ * Loaded inline by /admin/index.php (which is a symlink to the
+ * top-level index.php — same source, different URL roots). The
+ * service-status row pgreps for the six daemons (DStarRepeater,
+ * MMDVMHost, ircDDBgateway, timeserver, pistar-watchdog,
+ * pistar-keeper) and renders a green/red dot per service.
+ *
+ * D-Star reflector linker (POST handler further down): inputs are
+ * validated by preg_match whitelist (`[^A-Z]`, `[^A-Z0-9 ]` etc.)
+ * before being interpolated into a `sudo remotecontrold "<module>"
+ * link|unlink "<reflector>"` command. The validation is the only
+ * barrier to command injection; any change here should re-verify it.
+ *
+ * NOTE for the security pass: this file does not call
+ * setEmbeddableSecurityHeaders(). Coverage gap.
+ */
+?>
 <b>Service Status</b>
 <table>
   <tr>
@@ -22,19 +44,19 @@
 <?php if (!empty($_POST)):
 if (preg_match('/[^A-Z]/',$_POST["Link"])) { unset ($_POST["Link"]);}
 if ($_POST["Link"] == "LINK") {
-	if (preg_match('/[^A-Z0-9]/',$_POST["RefName"])) { unset ($_POST["RefName"]);}
-	if (preg_match('/[^A-Z]/',$_POST["Letter"])) { unset ($_POST["Letter"]);}
-	if (preg_match('/[^A-Z0-9 ]/',$_POST["Module"])) { unset ($_POST["Module"]);}
-	}
+    if (preg_match('/[^A-Z0-9]/',$_POST["RefName"])) { unset ($_POST["RefName"]);}
+    if (preg_match('/[^A-Z]/',$_POST["Letter"])) { unset ($_POST["Letter"]);}
+    if (preg_match('/[^A-Z0-9 ]/',$_POST["Module"])) { unset ($_POST["Module"]);}
+    }
 if ($_POST["Link"] == "UNLINK") {
-	if (preg_match('/[^A-Z0-9 ]/',$_POST["Module"])) { unset ($_POST["Module"]);}
-	}
+    if (preg_match('/[^A-Z0-9 ]/',$_POST["Module"])) { unset ($_POST["Module"]);}
+    }
 if (empty($_POST["RefName"]) || empty($_POST["Letter"]) || empty($_POST["Module"])) { echo "Somthing wrong with your input, try again";}
 
 
 else {
-	$targetRef = $_POST["RefName"]." ".$_POST["Letter"];
-	$module = $_POST["Module"];
+    $targetRef = $_POST["RefName"]." ".$_POST["Letter"];
+    $module = $_POST["Module"];
 
         if (strlen($module) != 8) {                                                     //Fix the length of the module information
                 $moduleFixedCs= strlen($module) - 1;                                    //Length of the string, -1
@@ -43,22 +65,22 @@ else {
                 $module = $moduleFixedCallPad.$moduleFixedBand;                         //Re add the band information
         };
 
-	$unlinkCommand = "sudo remotecontrold \"".$module."\" unlink";
-	$linkCommand = "sudo remotecontrold \"".$module."\" link never \"".$targetRef."\"";
+    $unlinkCommand = "sudo remotecontrold \"".$module."\" unlink";
+    $linkCommand = "sudo remotecontrold \"".$module."\" link never \"".$targetRef."\"";
 
-	if ($_POST["Link"] == "LINK") {
-		echo "<b>Reflector Connector</b>\n";
-		echo "<table>\n<tr><th><a class=tooltip href=\"#\">Command Output<span><b>Command Output</b></span></th></tr>\n<tr><td>";
-		echo exec($linkCommand);
-		echo "</tr></td>\n</table>\n";
-		}
-	if ($_POST["Link"] == "UNLINK") {
-		echo "<b>Reflector Connector</b>\n";
-		echo "<table>\n<tr><th><a class=tooltip href=\"#\">Command Output<span><b>Command Output</b></span></th></tr>\n<tr><td>";
-		echo exec($unlinkCommand);
-		echo "</tr></td>\n</table>\n";
-		}
-	}
+    if ($_POST["Link"] == "LINK") {
+        echo "<b>Reflector Connector</b>\n";
+        echo "<table>\n<tr><th><a class=tooltip href=\"#\">Command Output<span><b>Command Output</b></span></th></tr>\n<tr><td>";
+        echo exec($linkCommand);
+        echo "</tr></td>\n</table>\n";
+        }
+    if ($_POST["Link"] == "UNLINK") {
+        echo "<b>Reflector Connector</b>\n";
+        echo "<table>\n<tr><th><a class=tooltip href=\"#\">Command Output<span><b>Command Output</b></span></th></tr>\n<tr><td>";
+        echo exec($unlinkCommand);
+        echo "</tr></td>\n</table>\n";
+        }
+    }
 
 unset($_POST);
 echo '<script type="text/javascript">setTimeout(function() { window.location=window.location;},2000);</script>';
@@ -98,61 +120,61 @@ $dplusFile = fopen("/usr/local/etc/DPlus_Hosts.txt", "r");
 $dextraFile = fopen("/usr/local/etc/DExtra_Hosts.txt", "r");
 
 while (!feof($dcsFile)) {
-	$dcsLine = fgets($dcsFile);
-	if (strpos($dcsLine, 'DCS') !== FALSE && strpos($dcsLine, '#') === FALSE)
-		echo "	<option>".substr($dcsLine, 0, 6)."</option>\n";
+    $dcsLine = fgets($dcsFile);
+    if (strpos($dcsLine, 'DCS') !== FALSE && strpos($dcsLine, '#') === FALSE)
+        echo "    <option>".substr($dcsLine, 0, 6)."</option>\n";
 }
 fclose($dcsFile);
 
-echo "	<option selected>REF001</option>\n";
+echo "    <option selected>REF001</option>\n";
 
 while (!feof($dplusFile)) {
-	$dplusLine = fgets($dplusFile);
-	if (strpos($dplusLine, 'REF') !== FALSE && strpos($dplusLine, '#') === FALSE && strpos($dplusLine, 'REF001') === FALSE)
-		echo "	<option>".substr($dplusLine, 0, 6)."</option>\n";
+    $dplusLine = fgets($dplusFile);
+    if (strpos($dplusLine, 'REF') !== FALSE && strpos($dplusLine, '#') === FALSE && strpos($dplusLine, 'REF001') === FALSE)
+        echo "    <option>".substr($dplusLine, 0, 6)."</option>\n";
 }
 fclose($dplusFile);
 
 while (!feof($dextraFile)) {
-	$dextraLine = fgets($dextraFile);
-	if (strpos($dextraLine, 'XRF') !== FALSE && strpos($dextraLine, '#') === FALSE)
-		echo "	<option>".substr($dextraLine, 0, 6)."</option>\n";
+    $dextraLine = fgets($dextraFile);
+    if (strpos($dextraLine, 'XRF') !== FALSE && strpos($dextraLine, '#') === FALSE)
+        echo "    <option>".substr($dextraLine, 0, 6)."</option>\n";
 }
 fclose($dextraFile);
 
 ?>
     </select>
     <select aria-label="Module" name="Letter">
-	<option>A</option>
-	<option>B</option>
-	<option selected>C</option>
-	<option>D</option>
-	<option>E</option>
-	<option>F</option>
-	<option>G</option>
-	<option>H</option>
-	<option>I</option>
-	<option>J</option>
-	<option>K</option>
-	<option>L</option>
-	<option>M</option>
-	<option>N</option>
-	<option>O</option>
-	<option>P</option>
-	<option>Q</option>
-	<option>R</option>
-	<option>S</option>
-	<option>T</option>
-	<option>U</option>
-	<option>V</option>
-	<option>W</option>
-	<option>X</option>
-	<option>Y</option>
-	<option>Z</option>
+    <option>A</option>
+    <option>B</option>
+    <option selected>C</option>
+    <option>D</option>
+    <option>E</option>
+    <option>F</option>
+    <option>G</option>
+    <option>H</option>
+    <option>I</option>
+    <option>J</option>
+    <option>K</option>
+    <option>L</option>
+    <option>M</option>
+    <option>N</option>
+    <option>O</option>
+    <option>P</option>
+    <option>Q</option>
+    <option>R</option>
+    <option>S</option>
+    <option>T</option>
+    <option>U</option>
+    <option>V</option>
+    <option>W</option>
+    <option>X</option>
+    <option>Y</option>
+    <option>Z</option>
     </select>
     </td>
     <td role="radiogroup" aria-labelledby="lblLinkUnlink">
-	    <input id="rbLink" type="radio" name="Link" value="LINK" checked><label for="rbLink">Link</label>
+        <input id="rbLink" type="radio" name="Link" value="LINK" checked><label for="rbLink">Link</label>
         <input id="rbUnlink" type="radio" name="Link" value="UNLINK"><label for="rbUnlink">UnLink</label>
     </td>
     <td>
@@ -166,21 +188,20 @@ fclose($dextraFile);
 <?php
 exec ("pgrep pistar-keeper", $pids);
 if (!empty($pids))
-	{
-	echo "<br />\n";
-	echo "<b>PiStar-Keeper Logbook</b><input type=button onClick=\"location.href='/admin/pistar-keeper-download.php'\" value=\"Download Logbook\">\n";
-	echo "<table>\n";
-	echo "  <tr>\n";
-	echo "    <th><a class=tooltip href=\"#\">PiStar-Keeper Log Entries (UTC)<span><b>PiStar-Keeper Log Entries (UTC)</b></span></th>\n";
-	echo "  </tr>\n";
+    {
+    echo "<br />\n";
+    echo "<b>PiStar-Keeper Logbook</b><input type=button onClick=\"location.href='/admin/pistar-keeper-download.php'\" value=\"Download Logbook\">\n";
+    echo "<table>\n";
+    echo "  <tr>\n";
+    echo "    <th><a class=tooltip href=\"#\">PiStar-Keeper Log Entries (UTC)<span><b>PiStar-Keeper Log Entries (UTC)</b></span></th>\n";
+    echo "  </tr>\n";
 
-	exec ("tail -n 5 /var/pistar-keeper/pistar-keeper.log", $lines);
-		$counter = 0;
-		foreach ($lines as $line) {
-			echo "<tr><td align=\"left\">".$lines[$counter]."</td></tr>\n";
-			$counter++;
-		}
+    exec ("tail -n 5 /var/pistar-keeper/pistar-keeper.log", $lines);
+        $counter = 0;
+        foreach ($lines as $line) {
+            echo "<tr><td align=\"left\">".$lines[$counter]."</td></tr>\n";
+            $counter++;
+        }
 
-	echo "</table>\n";
-	}
-?>
+    echo "</table>\n";
+    }

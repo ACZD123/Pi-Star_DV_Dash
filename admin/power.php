@@ -1,4 +1,17 @@
 <?php
+/**
+ * Reboot / shutdown control.
+ *
+ * Two POST actions:
+ *   - reboot   — `sudo sync` x3, remount-ro, then `sudo reboot &`.
+ *                Renders a 90-second countdown that auto-redirects
+ *                back to /index.php once the device is expected back.
+ *   - shutdown — same sync/remount-ro, then `sudo shutdown -h now &`.
+ *
+ * The submit button on the form has a JS confirm() prompt to guard
+ * against accidental clicks. The PHP-level guard is just the
+ * PHP_SELF check at the top.
+ */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setSecurityHeaders();
 
@@ -113,4 +126,3 @@ if ($_SERVER["PHP_SELF"] == "/admin/power.php") {
   </html>
 <?php
 }
-?>

@@ -1,4 +1,15 @@
 <?php
+/**
+ * Live modem log viewer.
+ *
+ * AJAX-tails today's /var/log/pi-star/MMDVM-* (or DStarRepeater-*)
+ * log file in real time. Uses a session-stored byte offset so each
+ * `?ajax` call returns only the new bytes since the previous fetch,
+ * resetting if the log appears to have been rotated/truncated.
+ *
+ * Companion to download_modem_log.php (which sends the whole file
+ * in one go).
+ */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setSecurityHeaders();
 
@@ -32,11 +43,11 @@ if ($_SERVER["PHP_SELF"] == "/admin/live_modem_log.php") {
       if (file_exists("/var/log/pi-star/DStarRepeater-".gmdate('Y-m-d').".log")) {$logfile = "/var/log/pi-star/DStarRepeater-".gmdate('Y-m-d').".log";}
       if (file_exists("/var/log/pi-star/dstarrepeaterd-".gmdate('Y-m-d').".log")) {$logfile = "/var/log/pi-star/dstarrepeaterd-".gmdate('Y-m-d').".log";}
     }
-    
+
     if (empty($logfile) || !file_exists($logfile)) {
       exit();
     }
-    
+
     $handle = fopen($logfile, 'rb');
     if (isset($_SESSION['offset'])) {
       fseek($handle, 0, SEEK_END);
@@ -49,10 +60,10 @@ if ($_SERVER["PHP_SELF"] == "/admin/live_modem_log.php") {
     else {
       fseek($handle, 0, SEEK_END);
       $_SESSION['offset'] = ftell($handle);
-      } 
+      }
   exit();
   }
-  
+
 ?>
   <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -120,4 +131,3 @@ if ($_SERVER["PHP_SELF"] == "/admin/live_modem_log.php") {
 
 <?php
 }
-?>
