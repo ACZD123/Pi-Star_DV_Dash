@@ -2,10 +2,7 @@
 /**
  * Raw text editor for /etc/wpa_supplicant/wpa_supplicant.conf.
  *
- * Operator-editable WiFi configuration. Standard staged-write pattern,
- * but with a known oddity: this file leaves the live config
- * chowned `www-data:www-data` (rather than the usual `root:root` other
- * editors restore) — flagged for the security pass.
+ * Operator-editable WiFi configuration. Standard staged-write pattern.
  *
  * No daemon restart from this file; the operator must reset the WiFi
  * adapter (admin/wifi.php has buttons) for changes to take effect.
@@ -66,7 +63,13 @@ if(isset($_POST['data'])) {
         exec('sudo mount -o remount,rw /');
         exec('sudo cp /tmp/k45s7h5s9k3.tmp /etc/wpa_supplicant/wpa_supplicant.conf');
         exec('sudo chmod 644 /etc/wpa_supplicant/wpa_supplicant.conf');
-        exec('sudo chown www-data:www-data /etc/wpa_supplicant/wpa_supplicant.conf');
+        // Restore root:root ownership. Leaving the file chowned
+        // www-data:www-data lets the dashboard process read it
+        // directly (no sudo needed), which means any code-injection
+        // bug elsewhere in the dashboard could leak the WiFi PSK
+        // verbatim. wpa_supplicant runs as root, so root:root is
+        // also what the daemon expects.
+        exec('sudo chown root:root /etc/wpa_supplicant/wpa_supplicant.conf');
         exec('sudo mount -o remount,ro /');
 
         // Re-open the file and read it
