@@ -3705,13 +3705,70 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
     system('sudo systemctl start dapnetgateway.service > /dev/null 2>/dev/null &');        // DAPNetGateway
     system('sudo systemctl start aprsgateway.service > /dev/null 2>/dev/null &');        // APRSGateway
 
-    // Set the system timezone
-    if (empty($_POST['systemTimezone']) != TRUE ) {
-        $rollTimeZone = 'sudo timedatectl set-timezone '.escapeshellcmd($_POST['systemTimezone']);
-        system($rollTimeZone);
-        system('echo "'.escapeshellcmd($_POST['systemTimezone']).'" | sudo tee /etc/timezone > /dev/null');
-        $rollTimeZoneConfig = 'sudo sed -i "/date_default_timezone_set/c\\date_default_timezone_set(\''.escapeshellcmd($_POST['systemTimezone']).'\')\;" /var/www/dashboard/config/config.php';
-        system($rollTimeZoneConfig);
+    // Set the system timezone.
+    //
+    // Whitelist the operator's choice against PHP's authoritative timezone
+    // database (DateTimeZone::listIdentifiers()) BEFORE letting it anywhere
+    // near the shell or our own config.php. Without that gate, the previous
+    // implementation reached three injection sinks: `sudo timedatectl ...`,
+    // `echo "..." | sudo tee /etc/timezone`, and a `sed -i` that rewrote
+    // /var/www/dashboard/config/config.php — the last of which was a
+    // persistent PHP-RCE vector (a crafted timezone could land arbitrary
+    // PHP source into the dashboard's config). escapeshellcmd() does NOT
+    // protect a double-quoted shell context, so it was never sufficient.
+    //
+    // Once the whitelist passes, $tz is guaranteed to come from a fixed
+    // list of strings like 'Europe/London' / 'America/New_York' (chars
+    // are alphanumeric + '_' '/' '+' '-' only). We still pass through
+    // escapeshellarg() and write files via tmp+install for belt-and-braces.
+    if (empty($_POST['systemTimezone']) != TRUE) {
+        $tz = $_POST['systemTimezone'];
+        if (in_array($tz, DateTimeZone::listIdentifiers(), true)) {
+            // Sink 1: timedatectl. Argv-quoted for defence-in-depth.
+            system('sudo timedatectl set-timezone ' . escapeshellarg($tz));
+
+            // Sink 2: /etc/timezone. Stage in /tmp, copy via `install` so
+            // mode and ownership are set in one go. Note: `/tmp` is tmpfs
+            // and the destination lives on the SD card root filesystem, so
+            // `install` falls back to read+write+chmod+chown (NOT atomic
+            // via rename(2)). Same non-atomicity profile as the existing
+            // `cp` pattern used elsewhere in this dashboard — addressing
+            // atomicity device-wide is a follow-up concern.
+            $tzTmp = tempnam('/tmp', 'pistar_tz_');
+            file_put_contents($tzTmp, $tz . "\n");
+            system('sudo install -m 644 -o root -g root ' . escapeshellarg($tzTmp) . ' /etc/timezone');
+            @unlink($tzTmp);
+
+            // Sink 3: rewrite the dashboard's own config.php to match the
+            // new timezone. PHP-side preg_replace, NOT shelled-out sed —
+            // the original sed pipeline was the persistent-RCE risk.
+            $cfgPath = '/var/www/dashboard/config/config.php';
+            if (!is_readable($cfgPath)) {
+                error_log("Pi-Star configure.php: cannot read $cfgPath; dashboard PHP timezone not updated");
+            } else {
+                $cfgOriginal = file_get_contents($cfgPath);
+                $cfgRewritten = preg_replace(
+                    '/date_default_timezone_set\s*\([^)]*\)\s*;/',
+                    "date_default_timezone_set('" . $tz . "');",
+                    $cfgOriginal,
+                    1
+                );
+                if ($cfgRewritten === null) {
+                    error_log("Pi-Star configure.php: preg_replace error rewriting $cfgPath timezone");
+                } elseif ($cfgRewritten === $cfgOriginal) {
+                    error_log("Pi-Star configure.php: no date_default_timezone_set() call found in $cfgPath; dashboard PHP timezone not updated");
+                } else {
+                    $cfgTmp = tempnam('/tmp', 'pistar_cfg_');
+                    file_put_contents($cfgTmp, $cfgRewritten);
+                    system('sudo install -m 644 -o root -g root ' . escapeshellarg($cfgTmp) . ' ' . escapeshellarg($cfgPath));
+                    @unlink($cfgTmp);
+                }
+            }
+        }
+        // Silently ignore non-whitelisted input — the form picklist is
+        // built from `timedatectl list-timezones` so any value reaching
+        // this handler that ISN'T in PHP's list is either a stale form
+        // or a tampering attempt.
     }
 
     // Start Cron (occasionally remounts root as RO - would be bad if it did this at the wrong time....)
