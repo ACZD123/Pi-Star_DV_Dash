@@ -83,9 +83,10 @@
  */
 
 /**
- * Allow-list of paths the helper is permitted to write. Any other path
- * passed to `config_writer_stage_flat()` is rejected with an
- * error_log() entry and a `false` return.
+ * Allow-list of paths the helper is permitted to write via the
+ * flat key=value editor. Any other path passed to
+ * `config_writer_stage_flat()` is rejected with an error_log()
+ * entry and a `false` return.
  *
  * Defined as a function (not a constant) so the file is safe to
  * `require_once` multiple times under PHP 7.0 — array constants from
@@ -105,9 +106,31 @@ function config_writer_allowed_paths()
         '/etc/starnetserver',
         '/etc/hostapd/hostapd.conf',
         '/root/.Remote Control',                            // note: literal space in filename
-        '/var/www/dashboard/config/ircddblocal.php',
+    );
+}
+
+/**
+ * Allow-list of paths the helper is permitted to write via the
+ * PHP-statement editor (`config_writer_stage_php_string()`).
+ *
+ * These files are PHP source files included by the dashboard at
+ * runtime. Each contains one or more lines of the form
+ * `$varName='value';` at column 0. The PHP-statement editor
+ * rewrites the value with proper PHP-string escaping so the
+ * attacker-controlled bytes can never escape the single-quoted
+ * string literal — preventing PHP RCE via these files.
+ *
+ * Kept separate from the flat allow-list because the file shape
+ * and the editing semantics are different. A path that's writable
+ * under one editor is NOT automatically writable under the other.
+ *
+ * @return array<int,string>
+ */
+function config_writer_allowed_paths_php_string()
+{
+    return array(
         '/var/www/dashboard/config/language.php',
-        '/var/www/dashboard/config/config.php',
+        '/var/www/dashboard/config/ircddblocal.php',
     );
 }
 
@@ -164,6 +187,95 @@ function config_writer_stage_flat($path, $key, $value)
 }
 
 /**
+ * Stage a single PHP single-quoted string assignment edit.
+ *
+ * Targets PHP source files in
+ * {@see config_writer_allowed_paths_php_string()} that contain a
+ * line of the form `$varName='value';` at column 0. The first
+ * matching line is rewritten with the new value, properly escaped
+ * for a PHP single-quoted string literal — `\\` and `'` inside
+ * the value are escaped to `\\\\` and `\\'` respectively. All
+ * other bytes (including shell metachars `"` `;` `&` `$`) are
+ * stored verbatim — they are data inside a string literal, not
+ * code. This closes the PHP RCE class introduced by the previous
+ * `sudo sed -i` pattern, where attacker bytes could close the
+ * sed-emitted single-quote and inject arbitrary PHP statements.
+ *
+ * Like {@see config_writer_stage_flat()}, the edit is queued in
+ * memory until {@see config_writer_commit()} runs.
+ *
+ * @param string $path     Absolute path. Must appear in
+ *                         {@see config_writer_allowed_paths_php_string()}.
+ * @param string $varName  PHP variable name (no leading `$`).
+ *                         Must match `[A-Za-z_][A-Za-z0-9_]*`.
+ * @param string $value    The new value to assign. Must not contain
+ *                         NUL/CR/LF (those would either break PHP
+ *                         parsing or break the line-oriented edit).
+ *
+ * @return bool True if staged. False if rejected.
+ */
+function config_writer_stage_php_string($path, $varName, $value)
+{
+    if (!in_array($path, config_writer_allowed_paths_php_string(), true)) {
+        error_log("config_writer: refusing PHP-string stage for non-allowlisted path '$path'");
+        return false;
+    }
+    if (!preg_match('/\A[A-Za-z_][A-Za-z0-9_]*\z/', $varName)) {
+        error_log("config_writer: refusing malformed PHP var name '$varName' for $path");
+        return false;
+    }
+    if (preg_match('/[\x00\r\n]/', $value)) {
+        error_log("config_writer: refusing PHP-string value with NUL/CR/LF for $path:\$$varName");
+        return false;
+    }
+
+    if (!isset($GLOBALS['__config_writer_stage_phpstr'])) {
+        $GLOBALS['__config_writer_stage_phpstr'] = array();
+    }
+    if (!isset($GLOBALS['__config_writer_stage_phpstr'][$path])) {
+        $GLOBALS['__config_writer_stage_phpstr'][$path] = array();
+    }
+    $GLOBALS['__config_writer_stage_phpstr'][$path][$varName] = $value;
+    return true;
+}
+
+/**
+ * Atomically install $newContent at $path with mode 644 root:root.
+ *
+ * Internal helper shared by the flat and php-string commit paths.
+ * Returns null on success or a single-line diagnostic on failure.
+ * On failure the destination is left untouched and the temp file
+ * is unlinked.
+ *
+ * @param string $path        Absolute destination path.
+ * @param string $newContent  Full file content to install.
+ *
+ * @return string|null Error string, or null on success.
+ */
+function _config_writer_install_atomic($path, $newContent)
+{
+    $tmp = tempnam('/tmp', 'pistar_cw_');
+    if ($tmp === false) {
+        return "config_writer: tempnam() failed for $path";
+    }
+    if (file_put_contents($tmp, $newContent) === false) {
+        @unlink($tmp);
+        return "config_writer: file_put_contents() failed for $tmp; $path edits skipped";
+    }
+    $cmd = 'sudo install -m 644 -o root -g root '
+         . escapeshellarg($tmp) . ' '
+         . escapeshellarg($path);
+    $rc = 0;
+    $out = array();
+    exec($cmd . ' 2>&1', $out, $rc);
+    @unlink($tmp);
+    if ($rc !== 0) {
+        return "config_writer: install exit=$rc for $path: " . implode(' / ', $out);
+    }
+    return null;
+}
+
+/**
  * Apply every staged edit and clear the staging buffer.
  *
  * For each affected file:
@@ -199,10 +311,16 @@ function config_writer_stage_flat($path, $key, $value)
 function config_writer_commit($manageMount = true)
 {
     $errors = array();
-    if (empty($GLOBALS['__config_writer_stage'])) {
+    $flatStage = isset($GLOBALS['__config_writer_stage'])
+        ? $GLOBALS['__config_writer_stage']
+        : array();
+    $phpStrStage = isset($GLOBALS['__config_writer_stage_phpstr'])
+        ? $GLOBALS['__config_writer_stage_phpstr']
+        : array();
+
+    if (empty($flatStage) && empty($phpStrStage)) {
         return $errors;
     }
-    $stage = $GLOBALS['__config_writer_stage'];
 
     // Optional single mount-rw / batched-install / mount-ro envelope.
     // When the caller already has `/` open rw (configure.php's POST
@@ -214,7 +332,8 @@ function config_writer_commit($manageMount = true)
         system('sudo mount -o remount,rw /');
     }
 
-    foreach ($stage as $path => $kvPairs) {
+    // Pass 1 — flat key=value edits.
+    foreach ($flatStage as $path => $kvPairs) {
         if (!is_readable($path)) {
             $errors[] = "config_writer: cannot read $path; edits skipped";
             error_log("config_writer: cannot read $path; " . count($kvPairs) . " edits skipped");
@@ -247,43 +366,79 @@ function config_writer_commit($manageMount = true)
             }
         }
 
-        $tmp = tempnam('/tmp', 'pistar_cw_');
-        if ($tmp === false) {
-            $errors[] = "config_writer: tempnam() failed; $path edits skipped";
-            error_log("config_writer: tempnam() failed for $path");
+        $err = _config_writer_install_atomic(
+            $path,
+            implode("\n", $lines) . "\n"
+        );
+        if ($err !== null) {
+            $errors[] = $err;
+            error_log($err);
+        }
+    }
+
+    // Pass 2 — PHP single-quoted string assignment edits.
+    foreach ($phpStrStage as $path => $varValuePairs) {
+        if (!is_readable($path)) {
+            $errors[] = "config_writer: cannot read $path; PHP-string edits skipped";
+            error_log("config_writer: cannot read $path; "
+                . count($varValuePairs) . " PHP-string edits skipped");
             continue;
         }
-        $bytes = file_put_contents($tmp, implode("\n", $lines) . "\n");
-        if ($bytes === false) {
-            $errors[] = "config_writer: write to $tmp failed; $path edits skipped";
-            error_log("config_writer: file_put_contents() failed for $tmp; $path edits skipped");
-            @unlink($tmp);
+        $lines = file($path, FILE_IGNORE_NEW_LINES);
+        if ($lines === false) {
+            $errors[] = "config_writer: file() failed for $path; PHP-string edits skipped";
+            error_log("config_writer: file() failed for $path; "
+                . count($varValuePairs) . " PHP-string edits skipped");
             continue;
         }
 
-        // Atomic install. Mode/owner forced to 644 root:root — matches
-        // the convention every other editor in this codebase already
-        // uses for these files.
-        $cmd = 'sudo install -m 644 -o root -g root '
-             . escapeshellarg($tmp) . ' '
-             . escapeshellarg($path);
-        $rc = 0;
-        $out = array();
-        exec($cmd . ' 2>&1', $out, $rc);
-        if ($rc !== 0) {
-            $errors[] = "config_writer: install exit=$rc for $path: " . implode(' / ', $out);
-            error_log("config_writer: install exit=$rc for $path: " . implode(' / ', $out));
+        foreach ($varValuePairs as $varName => $value) {
+            // Match column-0 `$varName` followed by optional whitespace
+            // then `=`. preg_quote is belt-and-braces — the var name is
+            // already validated to /^[A-Za-z_][A-Za-z0-9_]*$/ by
+            // config_writer_stage_php_string().
+            $pattern = '/^\$' . preg_quote($varName, '/') . '\s*=/';
+            $applied = false;
+            foreach ($lines as $i => $line) {
+                if (preg_match($pattern, $line)) {
+                    // Escape value for a PHP single-quoted string
+                    // literal: only `\` and `'` are special inside
+                    // `'...'`. The two-char mask "\\'" tells
+                    // addcslashes() to backslash-escape both:
+                    //   `\` → `\\`  (first char of the mask)
+                    //   `'` → `\'`  (second char of the mask)
+                    // The result is parseable PHP that decodes back
+                    // to the original $value bytes — so attacker
+                    // bytes are stored as data, never executed.
+                    $escaped = addcslashes($value, "\\'");
+                    $lines[$i] = '$' . $varName . "='" . $escaped . "';";
+                    $applied = true;
+                    break;
+                }
+            }
+            if (!$applied) {
+                error_log("config_writer: $path has no \$$varName= line; PHP-string edit skipped");
+            }
         }
-        @unlink($tmp);
+
+        $err = _config_writer_install_atomic(
+            $path,
+            implode("\n", $lines) . "\n"
+        );
+        if ($err !== null) {
+            $errors[] = $err;
+            error_log($err);
+        }
     }
 
     if ($manageMount) {
         system('sudo mount -o remount,ro /');
     }
 
-    // Clear the stage so a subsequent commit() call doesn't re-apply
-    // already-applied edits.
+    // Clear both stages so a subsequent commit() call doesn't
+    // re-apply already-applied edits.
     $GLOBALS['__config_writer_stage'] = array();
+    $GLOBALS['__config_writer_stage_phpstr'] = array();
 
     return $errors;
 }

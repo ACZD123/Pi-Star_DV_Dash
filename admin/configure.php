@@ -678,11 +678,30 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
       if (escapeshellcmd($_POST['autoAP']) == 'ON') { system('sudo rm -rf /etc/hostap.off'); }
       }
 
-    // Change Dashboard Language
+    // Change Dashboard Language.
+    //
+    // Two layers of defence:
+    //   1. The helper escapes the value for a PHP single-quoted string
+    //      literal — attacker bytes can never escape the string and
+    //      become PHP code (closes the C5-class RCE this site shared).
+    //   2. We additionally require the candidate to be a real lang
+    //      file basename. Without this, an attacker who controls
+    //      dashboardLanguage could set the value to a string that no
+    //      /lang/<X>.php file matches and break every subsequent
+    //      dashboard render.
     if (empty($_POST['dashboardLanguage']) != TRUE ) {
-      $rollDashLang = 'sudo sed -i "/pistarLanguage=/c\\$pistarLanguage=\''.escapeshellcmd($_POST['dashboardLanguage']).'\';" /var/www/dashboard/config/language.php';
-      system($rollDashLang);
-      }
+        $candidateLang = $_POST['dashboardLanguage'];
+        if (preg_match('/\A[A-Za-z][A-Za-z0-9_]+\z/', $candidateLang)
+            && file_exists($_SERVER['DOCUMENT_ROOT'] . '/lang/' . $candidateLang . '.php')) {
+            config_writer_stage_php_string(
+                '/var/www/dashboard/config/language.php',
+                'pistarLanguage',
+                $candidateLang
+            );
+        } else {
+            error_log("configure.php: refusing dashboardLanguage='$candidateLang' (not a known lang file)");
+        }
+    }
 
     // Set the ircDDBGateway Remote Password and Port.
     //
@@ -1082,7 +1101,17 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
 
       config_writer_stage_flat('/etc/ircddbgateway', 'gatewayCallsign', $newCallsignUpper);
       config_writer_stage_flat('/etc/ircddbgateway', 'dplusLogin', str_pad($newCallsignUpper, 8, " "));
-      $rollDASHBOARDcall = 'sudo sed -i "/callsign=/c\\$callsign=\''.$newCallsignUpper.'\';" /var/www/dashboard/config/ircddblocal.php';
+      // ircddblocal.php is a PHP source file (`$callsign='X';`) — use
+      // the PHP-statement editor so the value is escaped as a PHP
+      // string literal, not interpolated into a sed pipeline.
+      // $newCallsignUpper is already preg_replace'd to /[A-Za-z0-9]/
+      // so this is correctness/consistency more than defence — but the
+      // helper provides a hard floor either way.
+      config_writer_stage_php_string(
+          '/var/www/dashboard/config/ircddblocal.php',
+          'callsign',
+          $newCallsignUpper
+      );
       config_writer_stage_flat('/etc/timeserver', 'callsign', $newCallsignUpper);
       config_writer_stage_flat('/etc/starnetserver', 'callsign', $newCallsignUpper);
       config_writer_stage_flat('/etc/starnetserver', 'ircddbUsername', $newCallsignUpperIRC);
