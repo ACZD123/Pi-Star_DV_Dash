@@ -96,6 +96,29 @@
 function csrf_session_start()
 {
     if (session_status() !== PHP_SESSION_ACTIVE) {
+        // Pi-Star ships with `session.gc_probability=0` AND
+        // /var/lib/php/sessions mounted as a 64KB tmpfs (per
+        // /etc/fstab in the OS image). With CSRF, every dashboard
+        // visit creates a session file, and without automatic GC
+        // those accumulate until reboot — at which point the tmpfs
+        // fills (~15 sessions) and session_start() starts failing
+        // with "No space left on device", silently breaking CSRF.
+        //
+        // Force GC at session-start time by bumping the probability
+        // ratio to 1/1. PHP runs GC itself during session_start when
+        // (gc_probability / gc_divisor) > random — at 1/1 that's
+        // every call, but only for THIS request's session_start.
+        // Cost: a tmpfs `glob` + a few `unlink`s, microseconds.
+        // The @-suppression handles hosts that disallow ini_set on
+        // these keys; failure just means we fall back to PHP's
+        // default behaviour, same as before this fix.
+        //
+        // session_gc() (PHP 7.1+) would be cleaner but the codebase
+        // targets PHP 7.0. ini_set works on every supported version.
+        if ((int)ini_get('session.gc_probability') === 0) {
+            @ini_set('session.gc_probability', '1');
+            @ini_set('session.gc_divisor', '1');
+        }
         // Suppress notices about headers already sent — some
         // dashboard pages emit output before this is reached.
         // The session won't be usable in that scenario, but
