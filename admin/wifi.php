@@ -29,7 +29,14 @@
  * Flagged for the security pass; no fix in this commit.
  */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
+require_once($_SERVER['DOCUMENT_ROOT'].'/config/csrf.php');
 setSecurityHeaders();
+
+// CSRF protection — see config/csrf.php for the full rationale.
+// Must run BEFORE any output: bootstraps the session on GET (so
+// Set-Cookie ships) and rejects forged POSTs (Reset WiFi adapter,
+// SaveWPAPSKSettings) cleanly with 403 before any side effect.
+csrf_verify();
 
 include('wifi/phpincs.php');
 $output = $return = 0;
@@ -183,7 +190,9 @@ switch($page) {
 
     echo '<script type="text/javascript">setTimeout(function () { location.reload(1); }, 15000);</script>
 <div class="infobox">
-<form action="'.$_SERVER['PHP_SELF'].'?page=wlan0_info" method="post">
+<form action="'.$_SERVER['PHP_SELF'].'?page=wlan0_info" method="post">';
+    csrf_field();
+    echo '
 <!-- <input type="submit" value="ifdown wlan0" name="ifdown_wlan0" /> -->
 <!-- <input type="submit" value="ifup wlan0" name="ifup_wlan0" /> -->
 <!-- <input type="button" value="Refresh" onclick="document.location.reload(true)" /> -->
@@ -281,7 +290,8 @@ echo '<br />
                         }
         }
         $numSSIDs = count($ssid);
-        $output = '<form method="post" action="'.$_SERVER['PHP_SELF'].'?page=wpa_conf" id="wpa_conf_form">
+        $output = '<form method="post" action="'.$_SERVER['PHP_SELF'].'?page=wpa_conf" id="wpa_conf_form">'
+                . csrf_field_html() . '
 <input type="button" value="WiFi Info" name="wlan0_info" onclick="document.location=\'?page=\'+this.name" /><br />
 <input type="hidden" id="Networks" name="Networks" />
 <div class="network" id="networkbox">'."\n";

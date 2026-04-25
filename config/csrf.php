@@ -132,11 +132,27 @@ function csrf_token()
  * Output is htmlspecialchars-safe: a hex string never contains
  * any character that needs escaping, but we encode anyway as a
  * defence against future changes to the token format.
+ *
+ * For sites that build form HTML into a string variable rather
+ * than echoing inline, see {@see csrf_field_html()}.
  */
 function csrf_field()
 {
+    echo csrf_field_html();
+}
+
+/**
+ * Return a hidden form input carrying the CSRF token, as a
+ * string. Useful for code that accumulates form HTML into a
+ * `$output` variable (e.g. wifi.php's wpa_conf form) where an
+ * `echo` mid-expression doesn't compose.
+ *
+ * @return string The hidden-input HTML.
+ */
+function csrf_field_html()
+{
     $tok = htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8');
-    echo '<input type="hidden" name="csrf_token" value="' . $tok . '" />';
+    return '<input type="hidden" name="csrf_token" value="' . $tok . '" />';
 }
 
 /**
