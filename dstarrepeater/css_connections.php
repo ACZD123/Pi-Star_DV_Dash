@@ -1,4 +1,23 @@
-<?php include_once $_SERVER['DOCUMENT_ROOT'].'/config/ircddblocal.php';
+<?php
+/**
+ * CCS (Connected Community System) connections + StarNet groups partial.
+ *
+ * AJAX-loaded partial; refreshed every 15 seconds by /index.php. Two
+ * sections rendered conditionally:
+ *   1. Active CCS Connections — read from /var/log/pi-star/Links.log,
+ *      surfaced only if the log contains at least one "CCS link" line.
+ *   2. StarNet groups — included via active_starnet_groups.php only when
+ *      `starNetCallsign1`..`5` are configured in /etc/ircddbgateway.
+ *
+ * No security_headers call here — it's a sub-partial; the parent page
+ * (index.php / last_herd.php / etc.) is responsible for headers.
+ *
+ * NOTE for the security pass: this file should call
+ * setEmbeddableSecurityHeaders() at the top — flagged in the wider
+ * audit as a coverage gap.
+ */
+
+include_once $_SERVER['DOCUMENT_ROOT'].'/config/ircddblocal.php';
 $configs = array();
 
 if ($configfile = fopen($gatewayConfigPath,'r')) {
@@ -30,33 +49,33 @@ if (exec('grep "CCS link" '.$linkLogPath.' | wc -l') >=1) {
 
     $ci = 0;
     if ($linkLog = fopen($linkLogPath,'r')) {
-	$i=0;
-	while ($linkLine = fgets($linkLog)) {
+    $i=0;
+    while ($linkLine = fgets($linkLog)) {
 // 2013-02-27 19:49:27: CCS link - Rptr: DB0LJ  B Remote: DL5DI    Dir: Incoming
            if(preg_match_all('/^(.{19}).*(C[A-Za-z]*).*Rptr: (.{8}).*Remote: (.{8}).*Dir: (.{8})$/',$linkLine,$linx) > 0){
-		  $utc_time = $linx[1][0];
+          $utc_time = $linx[1][0];
                   $utc_tz =  new DateTimeZone('UTC');
                   $local_tz = new DateTimeZone(date_default_timezone_get ());
                   $dt = new DateTime($utc_time, $utc_tz);
                   $dt->setTimeZone($local_tz);
                   $local_time = $dt->format('H:i:s M jS');
-		$linkDate = $local_time;
+        $linkDate = $local_time;
                 $linkType = $linx[2][0];
                 $linkRptr = $linx[3][0];
                 $linkRem = $linx[4][0];
                 $linkDir = $linx[5][0];
-		$ci++;
-		if($ci > 1) { $ci = 0; }
-		print "<tr>";
-		print "<td>$linkRptr</td>";
-		print "<td>$linkRem</td>";
-		print "<td>CCS</td>";
-		print "<td>$linkDir</td>";
-		print "<td>$linkDate</td>";
-		print "</tr>\n";
-	    }
-	}
-	fclose($linkLog);
+        $ci++;
+        if($ci > 1) { $ci = 0; }
+        print "<tr>";
+        print "<td>$linkRptr</td>";
+        print "<td>$linkRem</td>";
+        print "<td>CCS</td>";
+        print "<td>$linkDir</td>";
+        print "<td>$linkDate</td>";
+        print "</tr>\n";
+        }
+    }
+    fclose($linkLog);
     }
 
     print "</table>\n<br />\n";
@@ -64,13 +83,12 @@ if (exec('grep "CCS link" '.$linkLogPath.' | wc -l') >=1) {
 
         $stn_is_set = 0;
     for($i = 1;$i < 6; $i++){
-	$param="starNetCallsign" . $i;
-	if(isset($configs[$param])) {
-	    $stn_is_set = 1;
-	    break;
-	}
+    $param="starNetCallsign" . $i;
+    if(isset($configs[$param])) {
+        $stn_is_set = 1;
+        break;
+    }
     }
     if($stn_is_set > 0){
-	include_once $_SERVER['DOCUMENT_ROOT'].'/dstarrepeater/active_starnet_groups.php';
+    include_once $_SERVER['DOCUMENT_ROOT'].'/dstarrepeater/active_starnet_groups.php';
     }
-?>

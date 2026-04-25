@@ -1,9 +1,28 @@
 <?php
+/**
+ * System info partial — hostname, kernel, platform, CPU load/temp, service
+ * status grid (MMDVMHost / DStarRepeater / ircDDBGateway / TimeServer /
+ * PiStar-Watchdog / PiStar-Remote).
+ *
+ * Loaded inline by /index.php on the admin path and AJAX-refreshed every
+ * 15 seconds via $("#sysInfo").load(...). Used in BOTH MMDVMHost and
+ * DStarRepeater modes (same partial, gated by /index.php).
+ *
+ * Served two ways from /index.php: an inline `include` for the initial
+ * page render, then AJAX `$("#sysInfo").load(...)` for refreshes. The
+ * AJAX path makes this a direct HTTP target, so the setSecurityHeaders()
+ * call below applies headers in their own right (the headers_sent()
+ * guard inside makes the call idempotent on the include path too).
+ *
+ * Reads /etc/ircddbgateway (flat key=value via the hand-rolled parser)
+ * to surface the gateway callsign in the hardware-info table.
+ */
+
 require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
 setSecurityHeaders();
 
 include_once $_SERVER['DOCUMENT_ROOT'].'/config/ircddblocal.php';
-include_once $_SERVER['DOCUMENT_ROOT'].'/config/language.php';	      // Translation Code
+include_once $_SERVER['DOCUMENT_ROOT'].'/config/language.php';          // Translation Code
 include_once $_SERVER['DOCUMENT_ROOT'].'/mmdvmhost/tools.php';
 $configs = array();
 

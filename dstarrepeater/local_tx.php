@@ -1,9 +1,27 @@
 <?php
+/**
+ * Local TX list (D-Star repeater mode) — recent local transmissions
+ * the connected D-Star repeater has worked.
+ *
+ * AJAX-loaded partial; refreshed every ~3 seconds by /index.php in
+ * dstarrepeater mode. Same layout as last_herd.php (time / callsign /
+ * target / Rpt1 / Rpt2) but filters Headers.log by "Repeater header"
+ * lines so it only surfaces RF traffic, not network-side activity.
+ *
+ * Data flow: shells out to grep|sort against /var/log/pi-star/Headers.log
+ * to build /tmp/worked.log, then regex-parses each line. Callsign links
+ * use the operator's chosen lookup service (RadioID or QRZ from
+ * /etc/pistar-css.ini's [Lookup] Service key) plus aprs.fi for dPRS.
+ *
+ * The "Headers.log sample" comment block below documents the exact line
+ * shape the regex targets — preserve those examples verbatim.
+ */
+
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setEmbeddableSecurityHeaders();
 
 include_once $_SERVER['DOCUMENT_ROOT'].'/config/ircddblocal.php';
-include_once $_SERVER['DOCUMENT_ROOT'].'/config/language.php';	      // Translation Code
+include_once $_SERVER['DOCUMENT_ROOT'].'/config/language.php';          // Translation Code
 $configs = array();
 
 if ($configfile = fopen($gatewayConfigPath,'r')) {
@@ -26,8 +44,8 @@ if (file_exists('/etc/pistar-css.ini')) {
     if (fopen($piStarCssFile,'r')) { $piStarCss = parse_ini_file($piStarCssFile, true); }
 
     // Set the Values from the config file
-    if (isset($piStarCss['Lookup']['Service'])) { $callsignLookupSvc = $piStarCss['Lookup']['Service']; }		// Lookup Service "QRZ" or "RadioID"
-    else { $callsignLookupSvc = "RadioID"; }										// Set the default if its missing										// Set the default if its missing
+    if (isset($piStarCss['Lookup']['Service'])) { $callsignLookupSvc = $piStarCss['Lookup']['Service']; }        // Lookup Service "QRZ" or "RadioID"
+    else { $callsignLookupSvc = "RadioID"; }                                        // Set the default if its missing                                        // Set the default if its missing
 } else {
     // Default values
     $callsignLookupSvc = "RadioID";
@@ -59,35 +77,35 @@ if ($callsignLookupSvc == "QRZ") { $callsignLookupUrl = "https://www.qrz.com/db/
     exec('(grep "Repeater header" '.$hdrLogPath.'|sort -r -k7,7|sort -u -k7,8|sort -r >/tmp/worked.log) 2>&1 &');
     $ci = 0;
     if ($WorkedLog = fopen("/tmp/worked.log",'r')) {
-	while ($linkLine = fgets($WorkedLog)) {
+    while ($linkLine = fgets($WorkedLog)) {
             if(preg_match_all('/^(.{19}).*My: (.*).*Your: (.*).*Rpt1: (.*).*Rpt2: (.*).*Flags: (.*)$/',$linkLine,$linx) > 0){
-		$ci++;
-		if($ci > 1) { $ci = 0; }
+        $ci++;
+        if($ci > 1) { $ci = 0; }
                 print "<tr>";
-		$QSODate = date("d-M-Y H:i:s", strtotime(substr($linx[1][0],0,19)));
+        $QSODate = date("d-M-Y H:i:s", strtotime(substr($linx[1][0],0,19)));
                 $MyCall = str_replace(' ', '', substr($linx[2][0],0,8));
-		$MyCallLink = strtok(substr($linx[2][0],0,8), " ");
+        $MyCallLink = strtok(substr($linx[2][0],0,8), " ");
                 $MyId = str_replace(' ', '', substr($linx[2][0],9,4));
                 $YourCall = str_replace(' ', '&nbsp;', substr($linx[3][0],0,8));
                 $Rpt1 = str_replace(' ', '&nbsp;', substr($linx[4][0],0,8));
                 $Rpt2 = str_replace(' ', '&nbsp;', substr($linx[5][0],0,8));
-		    $utc_time = $QSODate;
+            $utc_time = $QSODate;
                     $utc_tz =  new DateTimeZone('UTC');
                     $local_tz = new DateTimeZone(date_default_timezone_get ());
                     $dt = new DateTime($utc_time, $utc_tz);
                     $dt->setTimeZone($local_tz);
                     $local_time = $dt->format('H:i:s M jS');
                 print "<td align=\"left\">$local_time</td>";
-		print "<td align=\"left\" width=\"180\"><div style=\"float:left;\"><a href=\"".$callsignLookupUrl.$MyCallLink."\" target=\"_blank\">$MyCall</a>";
+        print "<td align=\"left\" width=\"180\"><div style=\"float:left;\"><a href=\"".$callsignLookupUrl.$MyCallLink."\" target=\"_blank\">$MyCall</a>";
                 if($MyId) { print "/".$MyId."</div> <div style=\"text-align:right;\">&#40;<a href=\"https://aprs.fi/#!call=".$MyCallLink."*\" target=\"_blank\">dPRS</a>&#41;</div></td>"; }
-		     else { print "</div> <div style=\"text-align:right;\">&#40;<a href=\"https://aprs.fi/#!call=".$MyCallLink."*\" target=\"_blank\">dPRS</a>&#41;</div></td>"; }
+             else { print "</div> <div style=\"text-align:right;\">&#40;<a href=\"https://aprs.fi/#!call=".$MyCallLink."*\" target=\"_blank\">dPRS</a>&#41;</div></td>"; }
                 print "<td align=\"left\" width=\"100\">$YourCall</td>";
                 print "<td align=\"left\" width=\"100\">$Rpt1</td>";
                 print "<td align=\"left\" width=\"100\">$Rpt2</td>";
                 print "</tr>\n";
-	    }
-	}
-	fclose($WorkedLog);
+        }
+    }
+    fclose($WorkedLog);
     }
 ?>
 </table>
