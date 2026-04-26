@@ -127,7 +127,11 @@ if (file_exists('/etc/dmr2nxdn')) {
 if (isset($lastHeard[0])) {
     $listElem = $lastHeard[0];
     if ( $listElem[2] && $listElem[6] == null && $listElem[5] !== 'RF') {
-            echo "<td style=\"background:#f33;\">TX $listElem[1]</td>";
+            // $listElem[1] is the parsed mode string from the
+            // last-heard log line — RF-controllable, so escape
+            // before interpolating into HTML. (Same source as
+            // the lh.php / localtx.php fixes in #21.)
+            echo "<td style=\"background:#f33;\">TX " . htmlspecialchars((string)$listElem[1], ENT_QUOTES, 'UTF-8') . "</td>";
             }
             else {
             if (getActualMode($lastHeard, $mmdvmconfigs) === 'idle') {
@@ -182,7 +186,9 @@ if (isset($lastHeard[0])) {
                     echo "<td style=\"background:#4aa361;\">POCSAG</td>";
                     }
             else {
-                    echo "<td>".getActualMode($lastHeard, $mmdvmconfigs)."</td>";
+                    // getActualMode() returns log-derived strings;
+                    // escape before HTML interpolation.
+                    echo "<td>" . htmlspecialchars((string)getActualMode($lastHeard, $mmdvmconfigs), ENT_QUOTES, 'UTF-8') . "</td>";
                     }
         }
     }
@@ -190,15 +196,15 @@ else {
     echo "<td></td>";
 }
 ?></tr>
-<tr><th>Tx</th><td style="background: #ffffff;"><?php echo getMHZ(getConfigItem("Info", "TXFrequency", $mmdvmconfigs)); ?></td></tr>
-<tr><th>Rx</th><td style="background: #ffffff;"><?php echo getMHZ(getConfigItem("Info", "RXFrequency", $mmdvmconfigs)); ?></td></tr>
+<tr><th>Tx</th><td style="background: #ffffff;"><?php echo htmlspecialchars((string)getMHZ(getConfigItem("Info", "TXFrequency", $mmdvmconfigs)), ENT_QUOTES, 'UTF-8'); ?></td></tr>
+<tr><th>Rx</th><td style="background: #ffffff;"><?php echo htmlspecialchars((string)getMHZ(getConfigItem("Info", "RXFrequency", $mmdvmconfigs)), ENT_QUOTES, 'UTF-8'); ?></td></tr>
 <?php
 if (getDVModemFirmware()) {
-echo '<tr><th>FW</th><td style="background: #ffffff;">'.getDVModemFirmware().'</td></tr>'."\n";
+echo '<tr><th>FW</th><td style="background: #ffffff;">'.htmlspecialchars((string)getDVModemFirmware(), ENT_QUOTES, 'UTF-8').'</td></tr>'."\n";
 } ?>
 <?php
 if (getDVModemTCXOFreq()) {
-echo '<tr><th>TCXO</th><td style="background: #ffffff;">'.getDVModemTCXOFreq().'</td></tr>'."\n";
+echo '<tr><th>TCXO</th><td style="background: #ffffff;">'.htmlspecialchars((string)getDVModemTCXOFreq(), ENT_QUOTES, 'UTF-8').'</td></tr>'."\n";
 } ?>
 </table>
 
@@ -208,16 +214,24 @@ if ( $testMMDVModeDSTAR == 1 ) { //Hide the D-Star Reflector information when D-
 echo "<br />\n";
 echo "<table>\n";
 echo "<tr><th colspan=\"2\">".$lang['dstar_repeater']."</th></tr>\n";
-echo "<tr><th>RPT1</th><td style=\"background: #ffffff;\">".str_replace(' ', '&nbsp;', $configdstar['callsign'])."</td></tr>\n";
-echo "<tr><th>RPT2</th><td style=\"background: #ffffff;\">".str_replace(' ', '&nbsp;', $configdstar['gateway'])."</td></tr>\n";
+// Config values from /etc/dstarrepeater and /etc/ircddbgateway
+// — operator-controlled, but defensive escape before HTML
+// interpolation. The legacy `&nbsp;` substitution stays but
+// runs AFTER the htmlspecialchars so the entity isn't double-
+// encoded.
+echo "<tr><th>RPT1</th><td style=\"background: #ffffff;\">".str_replace(' ', '&nbsp;', htmlspecialchars((string)$configdstar['callsign'], ENT_QUOTES, 'UTF-8'))."</td></tr>\n";
+echo "<tr><th>RPT2</th><td style=\"background: #ffffff;\">".str_replace(' ', '&nbsp;', htmlspecialchars((string)$configdstar['gateway'], ENT_QUOTES, 'UTF-8'))."</td></tr>\n";
 echo "<tr><th colspan=\"2\">".$lang['dstar_net']."</th></tr>\n";
 if ($configs['aprsEnabled']) {
-    echo "<tr><th>APRS</th><td style=\"background: #ffffff;\">".substr($configs['aprsHostname'], 0, 16)."</td></tr>\n";
+    echo "<tr><th>APRS</th><td style=\"background: #ffffff;\">".htmlspecialchars(substr((string)$configs['aprsHostname'], 0, 16), ENT_QUOTES, 'UTF-8')."</td></tr>\n";
 }
 if ($configs['ircddbEnabled']) {
-    echo "<tr><th>IRC</th><td style=\"background: #ffffff;\">".substr($configs['ircddbHostname'], 0 ,16)."</td></tr>\n";
+    echo "<tr><th>IRC</th><td style=\"background: #ffffff;\">".htmlspecialchars(substr((string)$configs['ircddbHostname'], 0, 16), ENT_QUOTES, 'UTF-8')."</td></tr>\n";
 }
-echo "<tr><td colspan=\"2\" style=\"background: #ffffff;\">".getActualLink($reverseLogLinesMMDVM, "D-Star")."</td></tr>\n";
+// getActualLink() returns log-parsed strings (DMR talkgroups,
+// D-Star reflector names, NXDN/M17 link state etc.) which can
+// carry RF-controllable bytes; escape before display.
+echo "<tr><td colspan=\"2\" style=\"background: #ffffff;\">".htmlspecialchars((string)getActualLink($reverseLogLinesMMDVM, "D-Star"), ENT_QUOTES, 'UTF-8')."</td></tr>\n";
 echo "</table>\n";
 }
 
@@ -267,8 +281,14 @@ fclose($dmrMasterFile);
 echo "<br />\n";
 echo "<table>\n";
 echo "<tr><th colspan=\"2\">".$lang['dmr_repeater']."</th></tr>\n";
-echo "<tr><th>DMR ID</th><td style=\"background: #ffffff;\">".getConfigItem("General", "Id", $mmdvmconfigs)."</td></tr>\n";
-echo "<tr><th>DMR CC</th><td style=\"background: #ffffff;\">".getConfigItem("DMR", "ColorCode", $mmdvmconfigs)."</td></tr>\n";
+// All getConfigItem returns and $dmrMasterHost* values below
+// originate from /etc/mmdvmhost or /etc/dmrgateway (parse_ini)
+// or from log-parsed `exec(grep | awk)` pipelines. Escape every
+// echoed value so an editor-injected payload (closes the read
+// path of the M-3 stored XSS class) or a hostile log line can't
+// break out of the table cell.
+echo "<tr><th>DMR ID</th><td style=\"background: #ffffff;\">".htmlspecialchars((string)getConfigItem("General", "Id", $mmdvmconfigs), ENT_QUOTES, 'UTF-8')."</td></tr>\n";
+echo "<tr><th>DMR CC</th><td style=\"background: #ffffff;\">".htmlspecialchars((string)getConfigItem("DMR", "ColorCode", $mmdvmconfigs), ENT_QUOTES, 'UTF-8')."</td></tr>\n";
 echo "<tr><th>TS1</th>";
 if (getConfigItem("DMR Network", "Slot1", $mmdvmconfigs) == 1) { echo "<td style=\"background:#0b0;\">enabled</td></tr>\n"; } else { echo "<td style=\"background:#606060; color:#b0b0b0;\">disabled</td></tr>\n"; }
 echo "<tr><th>TS2</th>";
@@ -277,7 +297,7 @@ echo "<tr><th colspan=\"2\">".$lang['dmr_master']."</th></tr>\n";
 if (getEnabled("DMR Network", $mmdvmconfigs) == 1) {
         if ($dmrMasterHost == '127.0.0.1') {
             if ((isset($configdmrgateway['XLX Network 1']['Enabled'])) && ($configdmrgateway['XLX Network 1']['Enabled'] == 1)) {
-                echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$xlxMasterHost1."</td></tr>\n";
+                echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".htmlspecialchars((string)$xlxMasterHost1, ENT_QUOTES, 'UTF-8')."</td></tr>\n";
             }
                         if ( !isset($configdmrgateway['XLX Network 1']['Enabled']) && isset($configdmrgateway['XLX Network']['Enabled']) && $configdmrgateway['XLX Network']['Enabled'] == 1) {
                 if (file_exists("/var/log/pi-star/DMRGateway-".gmdate("Y-m-d").".log")) { $xlxMasterHost1 = exec('grep \'XLX, Linking\|XLX, Unlinking\|XLX, Logged\' /var/log/pi-star/DMRGateway-'.gmdate("Y-m-d").'.log | tail -1 | awk \'{print $5 " " $8 " " $9}\''); }
@@ -285,35 +305,35 @@ if (getEnabled("DMR Network", $mmdvmconfigs) == 1) {
                 if ( strpos($xlxMasterHost1, 'Linking') !== false ) { $xlxMasterHost1 = str_replace('Linking ', '', $xlxMasterHost1); }
                 else if ( strpos($xlxMasterHost1, 'Unlinking') !== false ) { $xlxMasterHost1 = "XLX Not Linked"; }
                 else if ( strpos($xlxMasterHost1, 'Logged') !== false ) { $xlxMasterHost1 = "XLX Not Linked"; }
-                echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$xlxMasterHost1."</td></tr>\n";
+                echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".htmlspecialchars((string)$xlxMasterHost1, ENT_QUOTES, 'UTF-8')."</td></tr>\n";
                         }
             if ($configdmrgateway['DMR Network 1']['Enabled'] == 1) {
-                echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$dmrMasterHost1."</td></tr>\n";
+                echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".htmlspecialchars((string)$dmrMasterHost1, ENT_QUOTES, 'UTF-8')."</td></tr>\n";
             }
             if ($configdmrgateway['DMR Network 2']['Enabled'] == 1) {
-                echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$dmrMasterHost2."</td></tr>\n";
+                echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".htmlspecialchars((string)$dmrMasterHost2, ENT_QUOTES, 'UTF-8')."</td></tr>\n";
             }
             if ($configdmrgateway['DMR Network 3']['Enabled'] == 1) {
-                echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$dmrMasterHost3."</td></tr>\n";
+                echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".htmlspecialchars((string)$dmrMasterHost3, ENT_QUOTES, 'UTF-8')."</td></tr>\n";
             }
             if (isset($configdmrgateway['DMR Network 4']['Enabled'])) {
                 if ($configdmrgateway['DMR Network 4']['Enabled'] == 1) {
-                    echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$dmrMasterHost4."</td></tr>\n";
+                    echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".htmlspecialchars((string)$dmrMasterHost4, ENT_QUOTES, 'UTF-8')."</td></tr>\n";
                 }
             }
             if (isset($configdmrgateway['DMR Network 5']['Enabled'])) {
                 if ($configdmrgateway['DMR Network 5']['Enabled'] == 1) {
-                    echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$dmrMasterHost5."</td></tr>\n";
+                    echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".htmlspecialchars((string)$dmrMasterHost5, ENT_QUOTES, 'UTF-8')."</td></tr>\n";
                 }
             }
             if (isset($configdmrgateway['DMR Network 6']['Enabled'])) {
                 if ($configdmrgateway['DMR Network 6']['Enabled'] == 1) {
-                    echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$dmrMasterHost6."</td></tr>\n";
+                    echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".htmlspecialchars((string)$dmrMasterHost6, ENT_QUOTES, 'UTF-8')."</td></tr>\n";
                 }
             }
         }
         else {
-            echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".$dmrMasterHost."</td></tr>\n";
+            echo "<tr><td  style=\"background: #ffffff;\" colspan=\"2\">".htmlspecialchars((string)$dmrMasterHost, ENT_QUOTES, 'UTF-8')."</td></tr>\n";
         }
     }
     else {
@@ -347,7 +367,7 @@ if ( $testMMDVModeYSF == 1 || $testDMR2YSF ) { //Hide the YSF information when S
         echo "<br />\n";
         echo "<table>\n";
         echo "<tr><th colspan=\"2\">".$lang['ysf_net']."</th></tr>\n";
-        echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">".$ysfLinkedToTxt."</td></tr>\n";
+        echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">".htmlspecialchars((string)$ysfLinkedToTxt, ENT_QUOTES, 'UTF-8')."</td></tr>\n";
         echo "</table>\n";
 }
 
@@ -368,9 +388,9 @@ if ( $testYSF2DMR ) { //Hide the YSF2DMR information when YSF2DMR Network mode n
         echo "<br />\n";
         echo "<table>\n";
         echo "<tr><th colspan=\"2\">YSF2DMR</th></tr>\n";
-    echo "<tr><th>DMR ID</th><td style=\"background: #ffffff;\">".$configysf2dmr['DMR Network']['Id']."</td></tr>\n";
+    echo "<tr><th>DMR ID</th><td style=\"background: #ffffff;\">".htmlspecialchars((string)$configysf2dmr['DMR Network']['Id'], ENT_QUOTES, 'UTF-8')."</td></tr>\n";
     echo "<tr><th colspan=\"2\">YSF2".$lang['dmr_master']."</th></tr>\n";
-        echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">".$dmrMasterHost."</td></tr>\n";
+        echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">".htmlspecialchars((string)$dmrMasterHost, ENT_QUOTES, 'UTF-8')."</td></tr>\n";
         echo "</table>\n";
 }
 
@@ -381,13 +401,13 @@ if ( $testMMDVModeP25 == 1 || $testYSF2P25 ) { //Hide the P25 information when P
     echo "<table>\n";
     if (getConfigItem("P25", "NAC", $mmdvmconfigs)) {
         echo "<tr><th colspan=\"2\">".$lang['p25_radio']."</th></tr>\n";
-        echo "<tr><th style=\"width:70px\">NAC</th><td>".getConfigItem("P25", "NAC", $mmdvmconfigs)."</td></tr>\n";
+        echo "<tr><th style=\"width:70px\">NAC</th><td>".htmlspecialchars((string)getConfigItem("P25", "NAC", $mmdvmconfigs), ENT_QUOTES, 'UTF-8')."</td></tr>\n";
     } else {
         echo "<tr><th colspan=\"2\">".$lang['p25_radio']."</th></tr>\n";
         echo "<tr><th style=\"width:70px\">NAC</th><td>0</td></tr>\n";
     }
     echo "<tr><th colspan=\"2\">".$lang['p25_net']."</th></tr>\n";
-    echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">".getActualLink($logLinesP25Gateway, "P25")."</td></tr>\n";
+    echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">".htmlspecialchars((string)getActualLink($logLinesP25Gateway, "P25"), ENT_QUOTES, 'UTF-8')."</td></tr>\n";
     echo "</table>\n";
 }
 
@@ -399,14 +419,14 @@ if ( $testMMDVModeNXDN == 1 || isset($testYSF2NXDN) || isset($testDMR2NXDN) ) { 
     echo "<table>\n";
     if (getConfigItem("NXDN", "RAN", $mmdvmconfigs)) {
         echo "<tr><th colspan=\"2\">".$lang['nxdn_radio']."</th></tr>\n";
-        echo "<tr><th style=\"width:70px\">RAN</th><td>".getConfigItem("NXDN", "RAN", $mmdvmconfigs)."</td></tr>\n";
+        echo "<tr><th style=\"width:70px\">RAN</th><td>".htmlspecialchars((string)getConfigItem("NXDN", "RAN", $mmdvmconfigs), ENT_QUOTES, 'UTF-8')."</td></tr>\n";
     } else {
         echo "<tr><th colspan=\"2\">".$lang['nxdn_radio']."</th></tr>\n";
         echo "<tr><th style=\"width:70px\">RAN</th><td>0</td></tr>\n";
     }
     echo "<tr><th colspan=\"2\">".$lang['nxdn_net']."</th></tr>\n";
     if (file_exists('/etc/nxdngateway')) {
-        echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">".getActualLink($logLinesNXDNGateway, "NXDN")."</td></tr>\n";
+        echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">".htmlspecialchars((string)getActualLink($logLinesNXDNGateway, "NXDN"), ENT_QUOTES, 'UTF-8')."</td></tr>\n";
     } else {
         echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">TG 65000</td></tr>\n";
     }
@@ -419,13 +439,13 @@ if ( $testMMDVModeM17 == 1 ) { //Hide the M17 information when P25 Network mode 
     echo "<table>\n";
     if (getConfigItem("M17", "CAN", $mmdvmconfigs)) {
         echo "<tr><th colspan=\"2\">".$lang['m17_radio']."</th></tr>\n";
-        echo "<tr><th style=\"width:70px\">CAN</th><td>".getConfigItem("M17", "CAN", $mmdvmconfigs)."</td></tr>\n";
+        echo "<tr><th style=\"width:70px\">CAN</th><td>".htmlspecialchars((string)getConfigItem("M17", "CAN", $mmdvmconfigs), ENT_QUOTES, 'UTF-8')."</td></tr>\n";
     } else {
         echo "<tr><th colspan=\"2\">".$lang['m17_radio']."</th></tr>\n";
         echo "<tr><th style=\"width:70px\">CAN</th><td>0</td></tr>\n";
     }
     echo "<tr><th colspan=\"2\">".$lang['m17_net']."</th></tr>\n";
-    echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">".getActualLink($logLinesM17Gateway, "M17")."</td></tr>\n";
+    echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">".htmlspecialchars((string)getActualLink($logLinesM17Gateway, "M17"), ENT_QUOTES, 'UTF-8')."</td></tr>\n";
     echo "</table>\n";
 }
 
@@ -434,12 +454,12 @@ if ( $testMMDVModePOCSAG == 1 ) { //Hide the POCSAG information when POCSAG Netw
     echo "<br />\n";
     echo "<table>\n";
     echo "<tr><th colspan=\"2\">POCSAG</th></tr>\n";
-    echo "<tr><th>Tx</th><td>".getMHZ(getConfigItem("POCSAG", "Frequency", $mmdvmconfigs))."</td></tr>\n";
+    echo "<tr><th>Tx</th><td>".htmlspecialchars((string)getMHZ(getConfigItem("POCSAG", "Frequency", $mmdvmconfigs)), ENT_QUOTES, 'UTF-8')."</td></tr>\n";
     if (isset($configdapnetgateway['DAPNET']['Address'])) {
         $dapnetGatewayRemoteAddr = $configdapnetgateway['DAPNET']['Address'];
         if (strlen($dapnetGatewayRemoteAddr) > 19) { $dapnetGatewayRemoteAddr = substr($dapnetGatewayRemoteAddr, 0, 17) . '..'; }
         echo "<tr><th colspan=\"2\">POCSAG Master</th></tr>\n";
-        echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">".$dapnetGatewayRemoteAddr."</td></tr>\n";
+        echo "<tr><td colspan=\"2\"style=\"background: #ffffff;\">".htmlspecialchars((string)$dapnetGatewayRemoteAddr, ENT_QUOTES, 'UTF-8')."</td></tr>\n";
     }
     echo "</table>\n";
 }
