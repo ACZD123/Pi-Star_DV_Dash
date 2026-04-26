@@ -236,7 +236,12 @@ if (file_exists('/etc/wpa_supplicant/wpa_supplicant.conf')) {
 if (isset($wifiCountryArr[0])) {
         $wifiCountry = explode("=", $wifiCountryArr[0]);
         if (isset($wifiCountry[1])) {
-                echo '&nbsp;&nbsp;&nbsp;WiFi Country : '.$wifiCountry[1]."<br />\n";
+                // Same hardening rationale as the SSID/PSK display in
+                // the wpa_conf branch: country comes from grep'ing
+                // wpa_supplicant.conf, save handler now constrains it
+                // to /\A[A-Z]{2}\z/, but the file may already contain
+                // pre-validation or hand-edited values.
+                echo '&nbsp;&nbsp;&nbsp;WiFi Country : '.htmlspecialchars((string)$wifiCountry[1], ENT_QUOTES, 'UTF-8')."<br />\n";
                 }
         }
 echo '<br />
@@ -314,10 +319,25 @@ echo '<br />
         $output .= '</select><br />'."\n";
 
         for($ssids = 0; $ssids < $numSSIDs; $ssids++) {
+            // Escape SSID/PSK before interpolating into `value="..."`.
+            // Source: /etc/wpa_supplicant/wpa_supplicant.conf parsed
+            // a few lines up. The save handler now strictly validates
+            // SSIDs/PSKs (printable ASCII, no `"` or `\`) so anything
+            // written by THIS dashboard going forward is safe — but
+            // the file may already contain values written by an
+            // older release or hand-edited via SSH, so display-side
+            // escaping closes the stored-XSS path.
+            //
+            // Round-trip: htmlspecialchars(ENT_QUOTES) is reversed by
+            // the browser when it decodes the value="..." attribute,
+            // so the form POSTs back the original bytes and re-saves
+            // unchanged for any value the save validator accepts.
+            $ssidHtml = htmlspecialchars((string)$ssid[$ssids], ENT_QUOTES, 'UTF-8');
+            $pskHtml  = htmlspecialchars((string)$psk[$ssids],  ENT_QUOTES, 'UTF-8');
             $output .= '<div id="Networkbox'.$ssids.'" class="NetworkBoxes">Network '.$ssids."\n";
             $output .= '<input type="button" value="Delete" onclick="DeleteNetwork('.$ssids.')" /><br />'."\n";
-            $output .= '<span class="tableft" id="lssid'.$ssids.'">SSID :</span><input type="text" id="ssid'.$ssids.'" name="ssid'.$ssids.'" value="'.$ssid[$ssids].'" onkeyup="CheckSSID(this)" /><br />'."\n";
-            $output .= '<span class="tableft" id="lpsk'.$ssids.'">PSK :</span><input type="password" id="psk'.$ssids.'" name="psk'.$ssids.'" value="'.$psk[$ssids].'" onkeyup="CheckPSK(this)" /><br /><br /></div>'."\n";
+            $output .= '<span class="tableft" id="lssid'.$ssids.'">SSID :</span><input type="text" id="ssid'.$ssids.'" name="ssid'.$ssids.'" value="'.$ssidHtml.'" onkeyup="CheckSSID(this)" /><br />'."\n";
+            $output .= '<span class="tableft" id="lpsk'.$ssids.'">PSK :</span><input type="password" id="psk'.$ssids.'" name="psk'.$ssids.'" value="'.$pskHtml.'" onkeyup="CheckPSK(this)" /><br /><br /></div>'."\n";
         }
         $output .= '</div>'."\n";
         $output .= '<div class="infobox">'."\n";
