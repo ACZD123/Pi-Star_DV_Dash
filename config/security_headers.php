@@ -143,10 +143,33 @@ function setSecurityHeadersAllowDifferentPorts() {
         header("Referrer-Policy: strict-origin-when-cross-origin");
         header("Permissions-Policy: geolocation=(), microphone=(), camera=()");
 
-        // Get current hostname for frame-src
-        $hostname = $_SERVER['HTTP_HOST'];
-        // Remove port if present to get just the hostname
-        $hostnameOnly = preg_replace('/:\d+$/', '', $hostname);
+// HTTP_HOST is client-controllable, and it's about to be
+        // interpolated INTO an HTTP response header value (CSP). A
+        // CRLF in the Host header would split the response and let
+        // an attacker inject a second header. A semicolon, space,
+        // or quote could break out of the frame-src directive (e.g.
+        // closing it early to widen frame-ancestors). The original
+        // `preg_replace('/:\d+$/', '', ...)` only stripped the port
+        // — anything else in HTTP_HOST flowed straight into the CSP.
+        //
+        // Tighten the regex to keep only hostname-shaped characters.
+        // Same set as ssh_access.php's #19 fix: DNS names, IPv4,
+        // IPv6 bracketed, optional `:port`. Strip the port suffix
+        // afterwards (frame-src already says `:*` so a specific
+        // port would be redundant).
+        $rawHost = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : '';
+        $hostnameOnly = preg_replace(
+            '/[^a-zA-Z0-9.\-\[\]]/',
+            '',
+            preg_replace('/:\d+$/', '', $rawHost)
+        );
+        if ($hostnameOnly === '') {
+            // No usable host (empty header, all-bad chars). Fall
+            // back to a safe constant so frame-src is well-formed
+            // — `localhost` will simply not match any real iframe
+            // target and the CSP rejects the embedding cleanly.
+            $hostnameOnly = 'localhost';
+        }
 
         // Build CSP that allows frames from same hostname on any port
         $imgSrc = $isHttps ? "'self' data: https:" : "'self' data: http: https:";
