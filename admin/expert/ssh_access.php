@@ -27,6 +27,37 @@ if (file_exists('/etc/default/shellinabox')) {
   $shellPort = exec($getPortCommand);
 }
 
+// HTTP_HOST is client-controllable (any HTTP client can send any
+// `Host:` header). Echoing it raw into HTML attributes — as the
+// iframe `src` and the anchor `href` below do — gives a passing
+// attacker a reflected XSS surface: a request with a crafted Host
+// header would render an iframe pointing at attacker-controlled
+// content inside this page.
+//
+// Two-layer defence:
+//   1. Strip everything that isn't a hostname character. The set
+//      `[a-zA-Z0-9.\-\[\]:]` covers DNS names, IPv4 dotted-quad,
+//      IPv6 bracketed literals, and the optional `:port` suffix.
+//      Anything else (CRLF, `<`, `"`, `'`, semicolons, spaces,
+//      parens, slashes) is dropped — the regex is what closes
+//      the XSS / response-splitting class.
+//   2. htmlspecialchars on top, so even if the regex were
+//      relaxed in the future the value still can't break out
+//      of the `"…"` HTML attribute it lands in.
+$shellHost = preg_replace(
+    '/[^a-zA-Z0-9.\-\[\]:]/',
+    '',
+    isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : ''
+);
+if ($shellHost === '') {
+    // Pathological case: HTTP_HOST contained nothing usable. Fall
+    // back to the LAN IP that nginx listens on rather than emitting
+    // a broken iframe `src=":port"`.
+    $shellHost = 'localhost';
+}
+$shellHostHtml = htmlspecialchars($shellHost, ENT_QUOTES, 'UTF-8');
+$shellPortHtml = htmlspecialchars((string)(isset($shellPort) ? $shellPort : ''), ENT_QUOTES, 'UTF-8');
+
 // Sanity Check that this file has been opened correctly
 if ($_SERVER["PHP_SELF"] == "/admin/expert/ssh_access.php") {
 ?>
@@ -58,14 +89,14 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/ssh_access.php") {
   <tr><th>SSH - Pi-Star</th></tr>
   <tr><td align="left"><div id="tail">
     <?php if (isset($shellPort)) {
-      echo "<iframe src=\"http://".$_SERVER['HTTP_HOST'].":".$shellPort."\" style=\"border:0px #ffffff none; background:#ffffff; color:#00ff00;\" name=\"Pi-Star_SSH\" scrolling=\"no\" frameborder=\"0\" marginheight=\"0px\" marginwidth=\"0px\" height=\"100%\" width=\"100%\"></iframe>";
+      echo "<iframe src=\"http://" . $shellHostHtml . ":" . $shellPortHtml . "\" style=\"border:0px #ffffff none; background:#ffffff; color:#00ff00;\" name=\"Pi-Star_SSH\" scrolling=\"no\" frameborder=\"0\" marginheight=\"0px\" marginwidth=\"0px\" height=\"100%\" width=\"100%\"></iframe>";
     }
     else {
       echo "SSH Feature not yet installed";
     } ?>
   </div></td></tr>
   </table>
-  <?php if (isset($shellPort)) { echo "<a href=\"//".$_SERVER['HTTP_HOST'].":".$shellPort."\">Click here for fullscreen SSH client</a><br />\n"; } ?>
+  <?php if (isset($shellPort)) { echo "<a href=\"//" . $shellHostHtml . ":" . $shellPortHtml . "\">Click here for fullscreen SSH client</a><br />\n"; } ?>
   </div>
   <div class="footer">
   Pi-Star web config, &copy; Andy Taylor (MW0MWZ) 2014-<?php echo date("Y"); ?>.<br />
