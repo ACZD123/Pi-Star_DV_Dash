@@ -457,12 +457,41 @@ echo '<br />
             $security = ConvertToSecurity($arrNetwork[3]);
             $ssid = $arrNetwork[4];
 
+            // SSID is broadcast by the access point and is operator-
+            // controlled at the AP — i.e. attacker-controlled if a
+            // rogue AP is in RF range. Without escaping, an SSID like
+            //   '); alert(1); //
+            // would execute JavaScript inside the dashboard the moment
+            // the operator opened the WiFi scan page (no auth bypass
+            // needed; the operator's own browser runs the payload).
+            // Two contexts to escape for:
+            //
+            //   - HTML cell content   -> htmlspecialchars
+            //   - JS string literal inside onclick="…(…)" -> json_encode
+            //     wraps the value in safe JS double-quotes; an outer
+            //     htmlspecialchars makes it safe inside the HTML
+            //     attribute (which is also double-quoted).
+            //
+            // The other fields ($channel, $signal, $security) come
+            // from wpa_cli output rather than the AP's own broadcast,
+            // so they're already constrained — but htmlspecialchars
+            // them too as defence in depth.
+            $ssidHtml = htmlspecialchars($ssid, ENT_QUOTES, 'UTF-8');
+            $ssidJs   = htmlspecialchars(
+                json_encode($ssid, JSON_HEX_TAG | JSON_HEX_AMP
+                                 | JSON_HEX_APOS | JSON_HEX_QUOT),
+                ENT_QUOTES, 'UTF-8'
+            );
+            $channelHtml  = htmlspecialchars((string)$channel, ENT_QUOTES, 'UTF-8');
+            $signalHtml   = htmlspecialchars($signal,   ENT_QUOTES, 'UTF-8');
+            $securityHtml = htmlspecialchars($security, ENT_QUOTES, 'UTF-8');
+
             echo '<tr>';
-            echo '<td style="text-align: left;"><input type="button" value="Select" onclick="AddScanned(\''.$ssid.'\')" /></td>';
-            echo '<td style="text-align: left;">'.$ssid.'</td>';
-            echo '<td style="text-align: left;">'.$channel.'</td>';
-            echo '<td>'.$signal.'</td>';
-            echo '<td style="text-align: left;">'.$security.'</td>';
+            echo '<td style="text-align: left;"><input type="button" value="Select" onclick="AddScanned('.$ssidJs.')" /></td>';
+            echo '<td style="text-align: left;">'.$ssidHtml.'</td>';
+            echo '<td style="text-align: left;">'.$channelHtml.'</td>';
+            echo '<td>'.$signalHtml.'</td>';
+            echo '<td style="text-align: left;">'.$securityHtml.'</td>';
             echo '</tr>'."\n";
 
         }
