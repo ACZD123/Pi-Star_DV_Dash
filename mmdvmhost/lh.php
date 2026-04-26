@@ -18,9 +18,14 @@
 
 
 require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
-setSecurityHeaders();
-
-require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
+// AJAX-loaded partial; the parent page (index.php) sets the full
+// security headers. setEmbeddableSecurityHeaders() ships the
+// non-frame-related security headers without locking frame-
+// ancestors, so the partial can be loaded into the parent via
+// $.load(). Calling setSecurityHeaders() before this would emit
+// X-Frame-Options + frame-ancestors 'self', which makes the
+// embeddable variant a no-op (headers_sent() === true) — fixes
+// the historical bug where the wrong variant won.
 setEmbeddableSecurityHeaders();
 
 include_once $_SERVER['DOCUMENT_ROOT'].'/config/config.php';          // MMDVMDash Config
@@ -75,35 +80,77 @@ for ($i = 0;  ($i <= 19); $i++) { //Last 20 calls
                         $dt = new DateTime($utc_time, $utc_tz);
                         $dt->setTimeZone($local_tz);
                         $local_time = $dt->format('H:i:s M jS');
+
+        // Every value below comes from log-line parsing in
+        // mmdvmhost/functions.php, which in turn parses log lines
+        // produced by RF traffic. A station transmitting on RF
+        // can put almost any byte sequence into the callsign or
+        // target field; without escaping it lands in the
+        // dashboard's HTML refresh every 1.5s. Normalise once
+        // here so every echo below works on safe values.
+        //
+        //   $modeHtml      — "Slot 1" -> "TS1" cosmetic + escape
+        //   $cs            — callsign (HTML-safe text)
+        //   $csUrl         — callsign URL-encoded for href= path
+        //   $csSuffix      — D-Star station ID after `/` (HTML-safe)
+        //   $tgt           — target callsign / talkgroup (HTML-safe)
+        //   $src           — source ("RF"/"Net"/etc.; HTML-safe)
+        //   $dur, $loss, $ber — numeric; HTML-safe defensively.
+        //
+        // The downstream str_replace ' '->'&nbsp;' has to run
+        // AFTER htmlspecialchars; the entity reference `&nbsp;`
+        // is intentional raw HTML output, not data.
+        $modeHtml = htmlspecialchars(str_replace('Slot ', 'TS', $listElem[1]), ENT_QUOTES, 'UTF-8');
+        $cs       = htmlspecialchars((string)$listElem[2], ENT_QUOTES, 'UTF-8');
+        $csUrl    = rawurlencode((string)$listElem[2]);
+        $csSuffix = htmlspecialchars((string)$listElem[3], ENT_QUOTES, 'UTF-8');
+        // Target normalisation: if it's a single character left-pad
+        // it to 8 spaces (cosmetic, matches legacy layout). The
+        // visible value is HTML-escaped, then spaces become
+        // non-breaking-space entities AFTER the escape so the
+        // entity isn't double-encoded.
+        $tgtRaw   = (string)$listElem[4];
+        if (strlen($tgtRaw) === 1) { $tgtRaw = str_pad($tgtRaw, 8, ' ', STR_PAD_LEFT); }
+        $tgtHtml  = htmlspecialchars($tgtRaw, ENT_QUOTES, 'UTF-8');
+        $src      = htmlspecialchars((string)$listElem[5], ENT_QUOTES, 'UTF-8');
+        $dur      = htmlspecialchars((string)$listElem[6], ENT_QUOTES, 'UTF-8');
+        $loss     = htmlspecialchars((string)(isset($listElem[7]) ? $listElem[7] : ''), ENT_QUOTES, 'UTF-8');
+        $ber      = htmlspecialchars((string)(isset($listElem[8]) ? $listElem[8] : ''), ENT_QUOTES, 'UTF-8');
+
         echo "<tr>";
         echo "<td align=\"left\">$local_time</td>";
-        echo "<td align=\"left\">".str_replace('Slot ', 'TS', $listElem[1])."</td>";
+        echo "<td align=\"left\">$modeHtml</td>";
         if (is_numeric($listElem[2])) {
-            if ($listElem[2] > 9999) { echo "<td align=\"left\"><a href=\"".$idLookupUrl.$listElem[2]."\" target=\"_blank\">$listElem[2]</a></td>"; }
-            else { echo "<td align=\"left\">".$listElem[2]."</td>"; }
+            if ($listElem[2] > 9999) { echo "<td align=\"left\"><a href=\"".$idLookupUrl.$csUrl."\" target=\"_blank\">$cs</a></td>"; }
+            else { echo "<td align=\"left\">$cs</td>"; }
         } elseif (!preg_match('/[A-Za-z].*[0-9]|[0-9].*[A-Za-z]/', $listElem[2])) {
-                        echo "<td align=\"left\">$listElem[2]</td>";
+                        echo "<td align=\"left\">$cs</td>";
         } else {
-            if (strpos($listElem[2],"-") > 0) { $listElem[2] = substr($listElem[2], 0, strpos($listElem[2],"-")); }
+            // Strip any "-suffix" before linking — re-derive the
+            // url-encoded form from the trimmed value.
+            $csTrim = (strpos($listElem[2], "-") > 0)
+                      ? substr($listElem[2], 0, strpos($listElem[2], "-"))
+                      : (string)$listElem[2];
+            $csTrimHtml = htmlspecialchars($csTrim, ENT_QUOTES, 'UTF-8');
+            $csTrimUrl  = rawurlencode($csTrim);
             if ( $listElem[3] && $listElem[3] != '    ' ) {
-                echo "<td align=\"left\"><div style=\"float:left;\"><a href=\"".$callsignLookupUrl.$listElem[2]."\" target=\"_blank\">$listElem[2]</a>/$listElem[3]</div> <div style=\"text-align:right;\">&#40;<a href=\"https://aprs.fi/#!call=".$listElem[2]."*\" target=\"_blank\">GPS</a>&#41;</div></td>";
+                echo "<td align=\"left\"><div style=\"float:left;\"><a href=\"".$callsignLookupUrl.$csTrimUrl."\" target=\"_blank\">$csTrimHtml</a>/$csSuffix</div> <div style=\"text-align:right;\">&#40;<a href=\"https://aprs.fi/#!call=".$csTrimUrl."*\" target=\"_blank\">GPS</a>&#41;</div></td>";
             } else {
-                echo "<td align=\"left\"><div style=\"float:left;\"><a href=\"".$callsignLookupUrl.$listElem[2]."\" target=\"_blank\">$listElem[2]</a></div> <div style=\"text-align:right;\">&#40;<a href=\"https://aprs.fi/#!call=".$listElem[2]."*\" target=\"_blank\">GPS</a>&#41;</div></td>";
+                echo "<td align=\"left\"><div style=\"float:left;\"><a href=\"".$callsignLookupUrl.$csTrimUrl."\" target=\"_blank\">$csTrimHtml</a></div> <div style=\"text-align:right;\">&#40;<a href=\"https://aprs.fi/#!call=".$csTrimUrl."*\" target=\"_blank\">GPS</a>&#41;</div></td>";
             }
         }
 
-        if (strlen($listElem[4]) == 1) { $listElem[4] = str_pad($listElem[4], 8, " ", STR_PAD_LEFT); }
-        if ( substr($listElem[4], 0, 6) === 'CQCQCQ' ) {
-            echo "<td align=\"left\">$listElem[4]</td>";
+        if ( substr($tgtRaw, 0, 6) === 'CQCQCQ' ) {
+            echo "<td align=\"left\">$tgtHtml</td>";
         } else {
-            echo "<td align=\"left\">".str_replace(" ","&nbsp;", $listElem[4])."</td>";
+            echo "<td align=\"left\">".str_replace(' ', '&nbsp;', $tgtHtml)."</td>";
         }
 
 
         if ($listElem[5] == "RF"){
             echo "<td style=\"background:#1d1;\">RF</td>";
         }else{
-            echo "<td>$listElem[5]</td>";
+            echo "<td>$src</td>";
         }
         if ($listElem[6] == null) {
             // Live duration
@@ -119,19 +166,19 @@ for ($i = 0;  ($i <= 19); $i++) { //Last 20 calls
         } else if ($listElem[6] == "POCSAG Data") {
             echo "<td colspan =\"3\" style=\"background:#1d1;\">POCSAG Data</td>";
         } else {
-            echo "<td>$listElem[6]</td>";
+            echo "<td>$dur</td>";
 
             // Colour the Loss Field
-            if (floatval($listElem[7]) < 1) { echo "<td>$listElem[7]</td>"; }
-            elseif (floatval($listElem[7]) == 1) { echo "<td style=\"background:#1d1;\">$listElem[7]</td>"; }
-            elseif (floatval($listElem[7]) > 1 && floatval($listElem[7]) <= 3) { echo "<td style=\"background:#fa0;\">$listElem[7]</td>"; }
-            else { echo "<td style=\"background:#f33;\">$listElem[7]</td>"; }
+            if (floatval($listElem[7]) < 1) { echo "<td>$loss</td>"; }
+            elseif (floatval($listElem[7]) == 1) { echo "<td style=\"background:#1d1;\">$loss</td>"; }
+            elseif (floatval($listElem[7]) > 1 && floatval($listElem[7]) <= 3) { echo "<td style=\"background:#fa0;\">$loss</td>"; }
+            else { echo "<td style=\"background:#f33;\">$loss</td>"; }
 
             // Colour the BER Field
-            if (floatval($listElem[8]) == 0) { echo "<td>$listElem[8]</td>"; }
-            elseif (floatval($listElem[8]) >= 0.0 && floatval($listElem[8]) <= 1.9) { echo "<td style=\"background:#1d1;\">$listElem[8]</td>"; }
-            elseif (floatval($listElem[8]) >= 2.0 && floatval($listElem[8]) <= 4.9) { echo "<td style=\"background:#fa0;\">$listElem[8]</td>"; }
-            else { echo "<td style=\"background:#f33;\">$listElem[8]</td>"; }
+            if (floatval($listElem[8]) == 0) { echo "<td>$ber</td>"; }
+            elseif (floatval($listElem[8]) >= 0.0 && floatval($listElem[8]) <= 1.9) { echo "<td style=\"background:#1d1;\">$ber</td>"; }
+            elseif (floatval($listElem[8]) >= 2.0 && floatval($listElem[8]) <= 4.9) { echo "<td style=\"background:#fa0;\">$ber</td>"; }
+            else { echo "<td style=\"background:#f33;\">$ber</td>"; }
         }
         echo "</tr>\n";
         }

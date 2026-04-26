@@ -17,9 +17,8 @@
 
 
 require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
-setSecurityHeaders();
-
-require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
+// AJAX-loaded partial — embeddable variant only. See the note in
+// mmdvmhost/lh.php for why the historical double-call was wrong.
 setEmbeddableSecurityHeaders();
 
 include_once $_SERVER['DOCUMENT_ROOT'].'/config/ircddblocal.php';
@@ -85,27 +84,51 @@ if ($callsignLookupSvc == "QRZ") { $callsignLookupUrl = "https://www.qrz.com/db/
             if(preg_match_all('/^(.{19}).*My: (.*).*Your: (.*).*Rpt1: (.*).*Rpt2: (.*).*Flags: (.*)$/',$linkLine,$linx) > 0){
         $ci++;
         if($ci > 1) { $ci = 0; }
-        print "<tr>";
                 $QSODate = date("d-M-Y H:i:s", strtotime(substr($linx[1][0],0,19)));
-                $MyCall = str_replace(' ', '', substr($linx[2][0],0,8));
-        $MyCallLink = strtok(substr($linx[2][0],0,8), " ");
-                $MyId = str_replace(' ', '', substr($linx[2][0],9,4));
-                $YourCall = str_replace(' ', '&nbsp;', substr($linx[3][0],0,8));
-                $Rpt1 = str_replace(' ', '&nbsp;', substr($linx[4][0],0,8));
-                $Rpt2 = str_replace(' ', '&nbsp;', substr($linx[5][0],0,8));
+
+        // Every value below is parsed out of /var/log/pi-star/Headers.log
+        // — log lines produced by RF traffic, where the
+        // transmitting station sets the callsign field. Without
+        // escaping, a hostile callsign lands in the dashboard's
+        // ~3 second AJAX refresh. Normalise once here so each
+        // echo below works on safe values.
+        //
+        //   $myCallRaw    — raw 8-char callsign window
+        //   $myCallHtml   — HTML-safe display form
+        //   $myCallLink   — first whitespace-delimited token (the
+        //                   callsign without the space-padded
+        //                   suffix) — used for href URLs
+        //   $myCallLinkHtml / $myCallLinkUrl — the URL forms
+        //   $myIdHtml     — 4-char ID after the `/` (HTML-safe)
+        //   $yourCallHtml / $rpt1Html / $rpt2Html — target +
+        //     repeaters with `&nbsp;` substitution applied AFTER
+        //     escaping so the literal entity isn't double-encoded.
+        $myCallRaw   = str_replace(' ', '', substr($linx[2][0],0,8));
+        $myCallHtml  = htmlspecialchars($myCallRaw, ENT_QUOTES, 'UTF-8');
+        $myCallLink  = strtok(substr($linx[2][0],0,8), " ");
+        $myCallLinkUrl  = rawurlencode((string)$myCallLink);
+        $myIdHtml    = htmlspecialchars(str_replace(' ', '', substr($linx[2][0],9,4)), ENT_QUOTES, 'UTF-8');
+        $yourCallHtml = str_replace(' ', '&nbsp;',
+                          htmlspecialchars(substr($linx[3][0],0,8), ENT_QUOTES, 'UTF-8'));
+        $rpt1Html     = str_replace(' ', '&nbsp;',
+                          htmlspecialchars(substr($linx[4][0],0,8), ENT_QUOTES, 'UTF-8'));
+        $rpt2Html     = str_replace(' ', '&nbsp;',
+                          htmlspecialchars(substr($linx[5][0],0,8), ENT_QUOTES, 'UTF-8'));
+
             $utc_time = $QSODate;
                     $utc_tz =  new DateTimeZone('UTC');
                     $local_tz = new DateTimeZone(date_default_timezone_get ());
                     $dt = new DateTime($utc_time, $utc_tz);
                     $dt->setTimeZone($local_tz);
                     $local_time = $dt->format('H:i:s M jS');
+        print "<tr>";
         print "<td align=\"left\">$local_time</td>";
-        print "<td align=\"left\" width=\"180\"><div style=\"float:left;\"><a href=\"".$callsignLookupUrl.$MyCallLink."\" target=\"_blank\">$MyCall</a>";
-        if($MyId) { print "/".$MyId."</div> <div style=\"text-align:right;\">&#40;<a href=\"https://aprs.fi/#!call=".$MyCallLink."*\" target=\"_blank\">dPRS</a>&#41;</div></td>"; }
-             else { print "</div> <div style=\"text-align:right;\">&#40;<a href=\"https://aprs.fi/#!call=".$MyCallLink."*\" target=\"_blank\">dPRS</a>&#41;</div></td>"; }
-                print "<td align=\"left\" width=\"100\">$YourCall</td>";
-        print "<td align=\"left\" width=\"100\">$Rpt1</td>";
-        print "<td align=\"left\" width=\"100\">$Rpt2</td>";
+        print "<td align=\"left\" width=\"180\"><div style=\"float:left;\"><a href=\"".$callsignLookupUrl.$myCallLinkUrl."\" target=\"_blank\">$myCallHtml</a>";
+        if($myIdHtml !== '') { print "/$myIdHtml</div> <div style=\"text-align:right;\">&#40;<a href=\"https://aprs.fi/#!call=".$myCallLinkUrl."*\" target=\"_blank\">dPRS</a>&#41;</div></td>"; }
+             else { print "</div> <div style=\"text-align:right;\">&#40;<a href=\"https://aprs.fi/#!call=".$myCallLinkUrl."*\" target=\"_blank\">dPRS</a>&#41;</div></td>"; }
+                print "<td align=\"left\" width=\"100\">$yourCallHtml</td>";
+        print "<td align=\"left\" width=\"100\">$rpt1Html</td>";
+        print "<td align=\"left\" width=\"100\">$rpt2Html</td>";
         print "</tr>\n";
         }
     }
