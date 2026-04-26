@@ -24,8 +24,6 @@ if ($_SERVER["PHP_SELF"] == "/admin/download_modem_log.php") {
         if (file_exists("/var/log/pi-star/dstarrepeaterd-".gmdate('Y-m-d').".log")) {$logfile = "/var/log/pi-star/dstarrepeaterd-".gmdate('Y-m-d').".log";}
     }
 
-    $unixfile = file_get_contents($logfile);
-    $dosfile = str_replace("\n", "\r\n", $unixfile);
     $hostNameInfo = exec('cat /etc/hostname');
 
     header('Pragma: public');
