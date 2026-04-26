@@ -22,7 +22,26 @@
  * sends commands and renders the rolling Bit Error Rate plot.
  */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
+require_once($_SERVER['DOCUMENT_ROOT'].'/config/csrf.php');
 setSecurityHeaders();
+
+// CSRF protection — see config/csrf.php for the full rationale.
+// Must run BEFORE any output: bootstraps the session on GET (so
+// Set-Cookie ships) and rejects forged POSTs cleanly with 403
+// before the start / saveoffset / cmd handlers run.
+//
+// Calibration's state-changing operations were historically GETs
+// (sendaction/sendcmd in the inline JS sent via $.ajax type:
+// 'GET'). That meant a hostile page could embed e.g.
+// `<img src="/admin/calibration.php?action=start">` and trigger
+// the privileged `sudo … pistar-mmdvmcal` startup just because
+// the operator's browser had cached basic-auth. The handlers
+// below now read $_POST exclusively; the JS sends type: 'POST'
+// with the csrf_token rendered into a JS variable from the GET-
+// rendered page. CSRF-token verification gates every state
+// change. The ?ajax log-tail polling stays as GET (read-only,
+// idempotent — safe as GET by REST convention).
+csrf_verify();
 
 // Load the language support
 require_once('config/language.php');
@@ -36,47 +55,111 @@ require_once('config/version.php');
 // Sanity Check that this file has been opened correctly
 if ($_SERVER["PHP_SELF"] == "/admin/calibration.php") {
 
-  if (isset($_GET['action'])) {
-    if ($_GET['action'] === 'start') {
-      system('sudo fuser -k 33273/udp > /dev/null 2>&1');
-      // Bind nc to 127.0.0.1 only. Without `-s 127.0.0.1`, nc -ulp
-      // listens on 0.0.0.0:33273 — and while calibration is running
-      // any LAN device can send UDP to that port and have its bytes
-      // piped straight into pistar-mmdvmcal (which drives the radio
-      // modem's TX/RX). The dashboard sends commands locally
-      // (socket_bind('127.0.0.1', 33272) -> 127.0.0.1:33273), so
-      // restricting the listener to localhost loses no functionality.
-      system('nc -ulp 33273 -s 127.0.0.1 | sudo -i script -qfc "/usr/local/sbin/pistar-mmdvmcal" /tmp/pi-star_mmdvmcal.log > /dev/null 2>&1 &');
-    }
-    else if (($_GET['action'] === 'saveoffset')) {
-      if (isset($_GET['param']) && strlen($_GET['param'])) {
-        system('sudo mount -o remount,rw /');
-        system('sudo sed -i "/RXOffset=/c\\RXOffset='.intval($_GET['param']).'" /etc/mmdvmhost');
-        system('sudo sed -i "/TXOffset=/c\\TXOffset='.intval($_GET['param']).'" /etc/mmdvmhost');
+  // ------------------------------------------------------------------
+  // State-changing handlers — POST only, CSRF-verified above.
+  //
+  // mmdvmcal's command set is small and well-defined; we mirror it
+  // explicitly here so the server never forwards arbitrary bytes to
+  // the running daemon's UDP IPC port. The whitelists below are
+  // what the inline JS (sendaction / sendcmd) ever generates.
+  // ------------------------------------------------------------------
+
+  if (isset($_POST['action'])) {
+      if ($_POST['action'] === 'start') {
+          system('sudo fuser -k 33273/udp > /dev/null 2>&1');
+          // Bind nc to 127.0.0.1 only. Without `-s 127.0.0.1`, nc -ulp
+          // listens on 0.0.0.0:33273 — and while calibration is running
+          // any LAN device can send UDP to that port and have its bytes
+          // piped straight into pistar-mmdvmcal (which drives the radio
+          // modem's TX/RX). The dashboard sends commands locally
+          // (socket_bind('127.0.0.1', 33272) -> 127.0.0.1:33273), so
+          // restricting the listener to localhost loses no functionality.
+          system('nc -ulp 33273 -s 127.0.0.1 | sudo -i script -qfc "/usr/local/sbin/pistar-mmdvmcal" /tmp/pi-star_mmdvmcal.log > /dev/null 2>&1 &');
+      } elseif ($_POST['action'] === 'saveoffset') {
+          if (isset($_POST['param']) && strlen($_POST['param'])) {
+              // intval() forces an integer — no shell metachar can
+              // survive into the sed pipeline. The signed range is
+              // fine; mmdvmhost accepts negative offsets.
+              $offset = intval($_POST['param']);
+              system('sudo mount -o remount,rw /');
+              system('sudo sed -i "/RXOffset=/c\\RXOffset=' . $offset . '" /etc/mmdvmhost');
+              system('sudo sed -i "/TXOffset=/c\\TXOffset=' . $offset . '" /etc/mmdvmhost');
+              // Re-seal the rootfs — the original handler was missing
+              // this and left `/` writable after a save.
+              system('sudo mount -o remount,ro /');
+          }
       }
-    }
-    exit();
+      // Anything else: silent ignore (could be a stale form replay or
+      // a probe). Don't echo errors that would leak the action set.
+      exit();
   }
 
-  if (isset($_GET['cmd']) && strlen($_GET['cmd'])) {
-    $sock = socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
-    socket_bind($sock, '127.0.0.1', 33272) || exit();
-    socket_sendto($sock, $_GET['cmd'], strlen($_GET['cmd']), 0, '127.0.0.1', 33273);
-    if (isset($_GET['param']) && strlen($_GET['param'])) {
-      usleep(500*1000);
-      socket_sendto($sock, $_GET['param']."\n", strlen($_GET['param'])+1, 0, '127.0.0.1', 33273);
-    }
-    if ($_GET['cmd'] === 'q') {
-      sleep(1);
-      socket_sendto($sock, "\n", 1, 0, '127.0.0.1', 33273); //send something to kill the pipe, also \n may be useful if something went wrong and mmdvmcal is waiting some param input
-    }
-    socket_close($sock);
-    exit();
+  if (isset($_POST['cmd']) && strlen($_POST['cmd'])) {
+      // Whitelist of mmdvmcal commands the inline JS ever sends.
+      //
+      //   q  Stop / quit calibration
+      //   k  D-Star BER mode
+      //   b  DMR Simplex BER mode
+      //   J  YSF BER mode
+      //   j  P25 BER mode
+      //   n  NXDN BER mode
+      //   f  Frequency offset down
+      //   F  Frequency offset up
+      //   z  Set step size      (param: 25 | 50 | 100)
+      //   e  Set frequency (Hz) (param: digits)
+      //
+      // Anything outside this set silently no-ops. The file-level
+      // CSRF check has already passed; this is defence-in-depth
+      // against a legit-authenticated session being tricked into
+      // sending arbitrary bytes to the running mmdvmcal.
+      $cmd = $_POST['cmd'];
+      $allowed = array('q', 'k', 'b', 'J', 'j', 'n', 'f', 'F', 'z', 'e');
+      if (!in_array($cmd, $allowed, true)) {
+          error_log("calibration: rejected unknown cmd '" . substr($cmd, 0, 16) . "'");
+          exit();
+      }
+
+      // Per-command param validation. Any param outside the per-cmd
+      // whitelist is dropped (the cmd byte itself still goes through
+      // unchanged — that matches the legacy "param missing" path).
+      $param = isset($_POST['param']) ? (string)$_POST['param'] : '';
+      if ($param !== '') {
+          if ($cmd === 'z' && !in_array($param, array('25', '50', '100'), true)) {
+              error_log("calibration: rejected step size '" . substr($param, 0, 16) . "'");
+              $param = '';
+          } elseif ($cmd === 'e' && !preg_match('/\A\d{6,12}\z/', $param)) {
+              // 6..12 digits covers HF (3.5 MHz = 7 digits) through
+              // 23 cm (1.3 GHz = 10 digits) plus a little headroom.
+              error_log("calibration: rejected frequency '" . substr($param, 0, 16) . "'");
+              $param = '';
+          }
+      }
+
+      $sock = socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
+      socket_bind($sock, '127.0.0.1', 33272) || exit();
+      socket_sendto($sock, $cmd, strlen($cmd), 0, '127.0.0.1', 33273);
+      if ($param !== '') {
+          usleep(500 * 1000);
+          socket_sendto($sock, $param . "\n", strlen($param) + 1, 0, '127.0.0.1', 33273);
+      }
+      if ($cmd === 'q') {
+          sleep(1);
+          // Send a newline to unblock anything mmdvmcal is waiting on
+          // (and to drop the nc-piped pipe cleanly).
+          socket_sendto($sock, "\n", 1, 0, '127.0.0.1', 33273);
+      }
+      socket_close($sock);
+      exit();
   }
 
   // Sanity Check Passed.
   header('Cache-Control: no-cache');
-  session_start();
+  // session_start() is no longer called here — csrf_verify() at the
+  // top of the file already started the session via
+  // csrf_session_start(). A second session_start() would emit a
+  // "session is already active" NOTICE on PHP 8.x. The existing
+  // $_SESSION['mmdvmcal_offset'] log-tail logic below works
+  // unchanged against the already-active session.
 
   if (!isset($_GET['ajax'])) {
     //unset($_SESSION['mmdvmcal_offset']);
@@ -137,16 +220,25 @@ if ($_SERVER["PHP_SELF"] == "/admin/calibration.php") {
 
     var rxoffset = ~~'<?php echo $RXOffset; ?>';
 
+    // CSRF token for the AJAX POSTs below. Issued by the GET-render
+    // path (this script tag is inside the GET response) and embedded
+    // verbatim — same-origin policy prevents a hostile site from
+    // reading this value. Every state-changing AJAX call carries it
+    // in the POST body; the PHP handler at the top of this file
+    // calls csrf_verify() before any side-effect.
+    var csrf_token = '<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>';
+
     function sendaction(action='', param='')
     {
       if (action === 'start') { document.getElementById("btnStart").disabled = true; }
       if (action === 'saveoffset') { rxoffset = ~~param }
       $.ajax({
         url: 'calibration.php',
-        type: 'GET',
+        type: 'POST',
         data: {
           'action': action,
-          'param': param
+          'param': param,
+          'csrf_token': csrf_token
         },
         cache: false,
         success: function(msg) {}
@@ -162,10 +254,11 @@ if ($_SERVER["PHP_SELF"] == "/admin/calibration.php") {
       if (param !== '') { sendcmd_lock = true; } //if we have param, lock to prevent cmd overlap while waiting param
       $.ajax({
         url: 'calibration.php',
-        type: 'GET',
+        type: 'POST',
         data: {
           'cmd': cmd,
-          'param': param
+          'param': param,
+          'csrf_token': csrf_token
         },
         cache: false,
         success: function(msg) {},
