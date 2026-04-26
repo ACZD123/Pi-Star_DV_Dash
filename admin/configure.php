@@ -3687,18 +3687,35 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
         else {
                     $success = fwrite($handleModemConfig, $configModemContent);
                     fclose($handleModemConfig);
+            // mv + chmod + chown was silently broken: the chmod/chown
+            // strings were single-quoted so PHP did NOT interpolate
+            // $modemConfigFile..., bash then expanded the unset name
+            // to empty, and `sudo chmod 644` / `sudo chown root:root`
+            // ran with no path argument and failed (exec ignored the
+            // non-zero exit). Net effect: the destination file ended
+            // up owned by www-data:www-data because the source temp
+            // had been created by fopen() under www-data, and `sudo mv`
+            // is just a rename(2) on the same filesystem — preserving
+            // the source ownership.
+            //
+            // Replace the triplet with a single `sudo install -m 644
+            // -o root -g root` call — the project's chosen idiom for
+            // atomic mode+owner setting (see /etc/timezone install
+            // ~line 3773 and the cfg installer ~line 3806). escapeshellarg
+            // both args defence-in-depth even though both are
+            // hardcoded literals.
             if (file_exists('/etc/dstar-radio.dstarrepeater')) {
                         if (fopen($modemConfigFileDStarRepeater,'r')) {
-                            exec('sudo mv /tmp/sja7hFRkw4euG7.tmp '.$modemConfigFileDStarRepeater);    // Move the file back
-                            exec('sudo chmod 644 $modemConfigFileDStarRepeater');            // Set the correct runtime permissions
-                            exec('sudo chown root:root $modemConfigFileDStarRepeater');            // Set the owner
+                            system('sudo install -m 644 -o root -g root '
+                                 . escapeshellarg('/tmp/sja7hFRkw4euG7.tmp') . ' '
+                                 . escapeshellarg($modemConfigFileDStarRepeater));
                         }
             }
             if (file_exists('/etc/dstar-radio.mmdvmhost')) {
                         if (fopen($modemConfigFileMMDVMHost,'r')) {
-                            exec('sudo mv /tmp/sja7hFRkw4euG7.tmp '.$modemConfigFileMMDVMHost);        // Move the file back
-                            exec('sudo chmod 644 $modemConfigFileMMDVMHost');                // Set the correct runtime permissions
-                            exec('sudo chown root:root $modemConfigFileMMDVMHost');            // Set the owner
+                            system('sudo install -m 644 -o root -g root '
+                                 . escapeshellarg('/tmp/sja7hFRkw4euG7.tmp') . ' '
+                                 . escapeshellarg($modemConfigFileMMDVMHost));
                         }
             }
             }
