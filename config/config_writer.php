@@ -104,7 +104,6 @@ function config_writer_allowed_paths()
         '/etc/aprsgateway',
         '/etc/mobilegps',
         '/etc/starnetserver',
-        '/etc/hostapd/hostapd.conf',
     );
 }
 
@@ -125,6 +124,7 @@ function config_writer_allowed_paths_privileged_flat()
 {
     return array(
         '/root/.Remote Control',                            // note: literal space in filename
+        '/etc/hostapd/hostapd.conf',                        // contains wpa_passphrase=… ; mode 600 root:root
     );
 }
 

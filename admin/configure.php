@@ -538,53 +538,14 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
       // fact that the value below never reaches a shell context — it
       // goes into a file as data via file_put_contents() + install.
       if (preg_match('/\A([\x20-\x7e]{8,63}|[0-9A-Fa-f]{64})\z/', $newPsk)) {
-        $hostapdPath = '/etc/hostapd/hostapd.conf';
-
-        if (is_readable($hostapdPath)) {
-          $lines = file($hostapdPath, FILE_IGNORE_NEW_LINES);
-          if ($lines !== false) {
-            // Replace the FIRST line whose head matches `wpa_passphrase=`
-            // and the first whose head matches `wpa=`. Matches the old
-            // sed semantics (no-op silently if either key is absent —
-            // the dashboard relies on the keys already being present
-            // in /etc/hostapd/hostapd.conf, which is shipped by Pi-Star).
-            foreach ($lines as $i => $line) {
-              if (strpos($line, 'wpa_passphrase=') === 0) {
-                $lines[$i] = 'wpa_passphrase=' . $newPsk;
-                break;
-              }
-            }
-            foreach ($lines as $i => $line) {
-              if (strpos($line, 'wpa=') === 0) {
-                $lines[$i] = 'wpa=2';
-                break;
-              }
-            }
-
-            $tmp = tempnam('/tmp', 'pistar_hostapd_');
-            $bytes = file_put_contents($tmp, implode("\n", $lines) . "\n");
-            if ($bytes === false) {
-                // /tmp full or perm issue — bail before `install` copies
-                // a zero-byte or stale temp into /etc/hostapd/hostapd.conf
-                // and silently breaks the AP.
-                error_log("Pi-Star configure.php: failed to stage hostapd.conf to $tmp; AutoAP PSK not updated");
-                @unlink($tmp);
-            } else {
-                // Preserve the file's existing mode (644 root:root) — the
-                // dashboard runs as www-data and must be able to read
-                // this file again on subsequent POSTs. Locking to 600
-                // here would break the feature on second use. Hardening
-                // the mode (600 root:root, then dashboard reads the PSK
-                // via sudo) is a separate hardening exercise.
-                system('sudo install -m 644 -o root -g root ' . escapeshellarg($tmp) . ' ' . escapeshellarg($hostapdPath));
-                @unlink($tmp);
-            }
-          } else {
-            error_log("Pi-Star configure.php: cannot read $hostapdPath into lines; AutoAP PSK not updated");
-          }
-        } else {
-          error_log("Pi-Star configure.php: $hostapdPath not readable; AutoAP PSK not updated");
-        }
+        // Stage via the privileged-flat editor: hostapd.conf is now
+        // mode 600 root:root (#15 hardening — the file holds the AP
+        // wpa_passphrase, no reason for it to be world-readable).
+        // The helper reads via `sudo cat`, edits in PHP, writes back
+        // via `sudo install -m 600 -o root -g root` — atomic, mode-
+        // enforced on every save.
+        config_writer_stage_privileged_flat('/etc/hostapd/hostapd.conf', 'wpa_passphrase', $newPsk);
+        config_writer_stage_privileged_flat('/etc/hostapd/hostapd.conf', 'wpa', '2');
       } else {
         error_log("Pi-Star configure.php: AutoAP PSK rejected (must be 8-63 printable ASCII or 64-hex)");
       }
@@ -2645,8 +2606,10 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
       system($rollHosts);
       system($rollMotd);
       if (file_exists('/etc/hostapd/hostapd.conf')) {
-          // Update the Hotspot name to the Hostname
-          config_writer_stage_flat('/etc/hostapd/hostapd.conf', 'ssid', $newHostnameLower);
+          // Update the Hotspot name to the Hostname. hostapd.conf
+          // moved to the privileged-flat allowlist (#15 hardening —
+          // the file is mode 600 root:root and holds the AP PSK).
+          config_writer_stage_privileged_flat('/etc/hostapd/hostapd.conf', 'ssid', $newHostnameLower);
       }
     }
 
