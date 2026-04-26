@@ -39,7 +39,14 @@ if ($_SERVER["PHP_SELF"] == "/admin/calibration.php") {
   if (isset($_GET['action'])) {
     if ($_GET['action'] === 'start') {
       system('sudo fuser -k 33273/udp > /dev/null 2>&1');
-      system('nc -ulp 33273 | sudo -i script -qfc "/usr/local/sbin/pistar-mmdvmcal" /tmp/pi-star_mmdvmcal.log > /dev/null 2>&1 &');
+      // Bind nc to 127.0.0.1 only. Without `-s 127.0.0.1`, nc -ulp
+      // listens on 0.0.0.0:33273 — and while calibration is running
+      // any LAN device can send UDP to that port and have its bytes
+      // piped straight into pistar-mmdvmcal (which drives the radio
+      // modem's TX/RX). The dashboard sends commands locally
+      // (socket_bind('127.0.0.1', 33272) -> 127.0.0.1:33273), so
+      // restricting the listener to localhost loses no functionality.
+      system('nc -ulp 33273 -s 127.0.0.1 | sudo -i script -qfc "/usr/local/sbin/pistar-mmdvmcal" /tmp/pi-star_mmdvmcal.log > /dev/null 2>&1 &');
     }
     else if (($_GET['action'] === 'saveoffset')) {
       if (isset($_GET['param']) && strlen($_GET['param'])) {
