@@ -114,13 +114,27 @@ if($_POST) {
         $success = fwrite($handle, $content);
         fclose($handle);
 
-        // Updates complete - copy the working file back to the proper location
-        exec('sudo mount -o remount,rw /');                    // Make rootfs writable
-        exec('sudo cp /tmp/aXJjZGRiZ2F0ZXdheQ.tmp /etc/ircddbgateway');        // Move the file back
-        exec('sudo sed -i \'/\\[ircddbgateway\\]/d\' /etc/ircddbgateway');    // Clean up file mangling
-        exec('sudo chmod 644 /etc/ircddbgateway');                // Set the correct runtime permissions
-        exec('sudo chown root:root /etc/ircddbgateway');            // Set the owner
-        exec('sudo mount -o remount,ro /');                    // Make rootfs read-only
+        // /etc/ircddbgateway is a FLAT key=value file on disk — the
+        // synthetic [ircddbgateway] header was injected at line ~75
+        // only to satisfy parse_ini_file()'s section model. The /tmp
+        // staging file keeps the header (so the form re-render via
+        // parse_ini_file at the bottom of this script still finds
+        // sections); the on-disk version must not. Strip via PHP's
+        // preg_replace and install the cleaned content directly —
+        // drops the prior `sudo sed -i` from this code path (L-7).
+        $etcContent  = preg_replace('/^\[ircddbgateway\]\r?\n/m', '', $content);
+        $etcStaging  = '/tmp/aXJjZGRiZ2F0ZXdheQ_etc.tmp';
+        file_put_contents($etcStaging, $etcContent);
+
+        // Atomic install: content + mode + owner set in one syscall
+        // sequence (B5 / L-5 pattern). Replaces the prior cp +
+        // chmod + chown trio so an interrupted RW window can't leave
+        // /etc/ircddbgateway in a transient state.
+        exec('sudo mount -o remount,rw /');
+        exec('sudo install -m 644 -o root -g root '
+             . escapeshellarg($etcStaging) . ' /etc/ircddbgateway');
+        exec('sudo mount -o remount,ro /');
+        @unlink($etcStaging);
 
         // Reload the affected daemon
         exec('sudo systemctl restart ircddbgateway.service');            // Reload the daemon

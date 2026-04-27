@@ -114,13 +114,21 @@ if($_POST) {
         $success = fwrite($handle, $content);
         fclose($handle);
 
-        // Updates complete - copy the working file back to the proper location
-        exec('sudo mount -o remount,rw /');                    // Make rootfs writable
-        exec('sudo cp /tmp/dGltZXNlcnZlcg.tmp /etc/timeserver');    // Move the file back
-        exec('sudo sed -i \'/\\[timeserver\\]/d\' /etc/timeserver');            // Clean up file mangling
-        exec('sudo chmod 644 /etc/timeserver');                // Set the correct runtime permissions
-        exec('sudo chown root:root /etc/timeserver');            // Set the owner
-        exec('sudo mount -o remount,ro /');                    // Make rootfs read-only
+        // /etc/timeserver is a FLAT key=value file on disk — the
+        // synthetic [timeserver] header is injected only for
+        // parse_ini_file()'s benefit. Strip it via PHP and install
+        // the cleaned content directly (L-7: drops sudo sed -i;
+        // L-5: collapses cp + chmod + chown into one atomic install).
+        // See edit_ircddbgateway.php for the full rationale.
+        $etcContent  = preg_replace('/^\[timeserver\]\r?\n/m', '', $content);
+        $etcStaging  = '/tmp/dGltZXNlcnZlcg_etc.tmp';
+        file_put_contents($etcStaging, $etcContent);
+
+        exec('sudo mount -o remount,rw /');
+        exec('sudo install -m 644 -o root -g root '
+             . escapeshellarg($etcStaging) . ' /etc/timeserver');
+        exec('sudo mount -o remount,ro /');
+        @unlink($etcStaging);
 
         // Reload the affected daemon
         exec('sudo systemctl restart timeserver.service');        // Reload the daemon

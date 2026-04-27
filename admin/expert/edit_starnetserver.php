@@ -112,13 +112,21 @@ if($_POST) {
         $success = fwrite($handle, $content);
         fclose($handle);
 
-        // Updates complete - copy the working file back to the proper location
-        exec('sudo mount -o remount,rw /');                    // Make rootfs writable
-        exec('sudo cp /tmp/c3Rhcm5ldHNlcnZlcg.tmp /etc/starnetserver');        // Move the file back
-        exec('sudo sed -i \'/\\[starnetserver\\]/d\' /etc/starnetserver');    // Clean up file mangling
-        exec('sudo chmod 644 /etc/starnetserver');                // Set the correct runtime permissions
-        exec('sudo chown root:root /etc/starnetserver');            // Set the owner
-        exec('sudo mount -o remount,ro /');                    // Make rootfs read-only
+        // /etc/starnetserver is a FLAT key=value file on disk — the
+        // synthetic [starnetserver] header is injected only for
+        // parse_ini_file()'s benefit. Strip it via PHP and install
+        // the cleaned content directly (L-7: drops sudo sed -i;
+        // L-5: collapses cp + chmod + chown into one atomic install).
+        // See edit_ircddbgateway.php for the full rationale.
+        $etcContent  = preg_replace('/^\[starnetserver\]\r?\n/m', '', $content);
+        $etcStaging  = '/tmp/c3Rhcm5ldHNlcnZlcg_etc.tmp';
+        file_put_contents($etcStaging, $etcContent);
+
+        exec('sudo mount -o remount,rw /');
+        exec('sudo install -m 644 -o root -g root '
+             . escapeshellarg($etcStaging) . ' /etc/starnetserver');
+        exec('sudo mount -o remount,ro /');
+        @unlink($etcStaging);
 
         // Reload the affected daemon so the saved edits take effect
         // without a manual restart. Was commented out historically;
