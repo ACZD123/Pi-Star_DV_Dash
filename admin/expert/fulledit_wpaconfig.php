@@ -63,6 +63,12 @@ if(isset($_POST['data'])) {
 
         // Open the file and write the data
         $filepath = '/tmp/k45s7h5s9k3.tmp';
+        // Clean up the /tmp staging file on script exit so the
+        // editor's potentially-secrets-bearing copy of /etc/<config>
+        // doesn't persist between requests. @-suppression handles
+        // the case where a sudo mv (e.g. fulledit_bmapikey) already
+        // consumed the staging file before script end.
+        register_shutdown_function(function() use ($filepath) { @unlink($filepath); });
         $fh = fopen($filepath, 'w');
         fwrite($fh, $_POST['data']);
         fclose($fh);
@@ -88,6 +94,12 @@ if(isset($_POST['data'])) {
 
         // Open the file and read it
         $filepath = '/tmp/k45s7h5s9k3.tmp';
+        // Clean up the /tmp staging file on script exit so the
+        // editor's potentially-secrets-bearing copy of /etc/<config>
+        // doesn't persist between requests. @-suppression handles
+        // the case where a sudo mv (e.g. fulledit_bmapikey) already
+        // consumed the staging file before script end.
+        register_shutdown_function(function() use ($filepath) { @unlink($filepath); });
         $fh = fopen($filepath, 'r');
         $theData = fread($fh, filesize($filepath));
 }
