@@ -49,22 +49,44 @@ require_once('../config/version.php');
 // the other. proc_open() + stdin pipes — password never on argv,
 // never reaches a shell. chpasswd FIRST so PAM rejection blocks
 // the htpasswd write and keeps web/shell auth in sync.
-$passwordChanged = false;
+//
+// Two-field verification: the form posts both `adminPassword` and
+// `adminPasswordConfirm`. Client-side functions.js compares them on
+// keystroke and only enables the submit button when they match;
+// the server-side check below is defence in depth — never trust
+// the client to enforce verification.
+$passwordChanged  = false;
 $passwordRejected = false;
+$rejectReason     = '';
 if (!empty($_POST['adminPassword'])) {
-    $rawPassword = stripslashes(trim($_POST['adminPassword']));
+    $rawPassword        = stripslashes(trim($_POST['adminPassword']));
+    $rawPasswordConfirm = isset($_POST['adminPasswordConfirm'])
+        ? stripslashes(trim($_POST['adminPasswordConfirm']))
+        : '';
 
     $hasIllegalChar = preg_match('/[\x00\r\n]/', $rawPassword);
     $tooLong        = strlen($rawPassword) > 256;
     $isStillDefault = hash_equals('raspberry', $rawPassword);
+    // hash_equals on user-supplied vs user-supplied isn't a security
+    // boundary (no secret on either side), but it's the right idiom
+    // for password compares — and guards against any future caller
+    // mistaking the result for an authentication signal.
+    $confirmMatches = hash_equals($rawPassword, $rawPasswordConfirm);
 
-    if ($rawPassword === '' || $hasIllegalChar || $tooLong || $isStillDefault) {
-        // Reject without spawning anything. isStillDefault closes the
-        // obvious "operator submits the default again" footgun — this
-        // page exists because that password is the problem.
+    if ($rawPassword === '' || $hasIllegalChar || $tooLong) {
         $passwordRejected = true;
+        $rejectReason     = 'invalid';
         error_log('Pi-Star change_password_required.php: adminPassword rejected '
-                . '(empty, contains NUL/CR/LF, > 256 bytes, or still the default)');
+                . '(empty, contains NUL/CR/LF, or > 256 bytes)');
+    } elseif ($isStillDefault) {
+        $passwordRejected = true;
+        $rejectReason     = 'default';
+        error_log('Pi-Star change_password_required.php: adminPassword rejected (still the default)');
+    } elseif (!$confirmMatches) {
+        $passwordRejected = true;
+        $rejectReason     = 'mismatch';
+        error_log('Pi-Star change_password_required.php: adminPassword rejected '
+                . '(confirmation does not match)');
     } else {
         $descriptors = array(
             0 => array('pipe', 'r'),
@@ -89,6 +111,7 @@ if (!empty($_POST['adminPassword'])) {
         if ($cpExit !== 0) {
             // PAM rejection (libpwquality, history, length, etc.).
             $passwordRejected = true;
+            $rejectReason     = 'pam';
             error_log('Pi-Star change_password_required.php: chpasswd exit='
                     . $cpExit . '; stderr=' . trim($cpStderr));
         } else {
@@ -133,6 +156,7 @@ if (!empty($_POST['adminPassword'])) {
 <meta http-equiv="Expires" content="0" />
 <link rel="shortcut icon" href="images/favicon.ico" type="image/x-icon" />
 <link rel="stylesheet" type="text/css" href="../css/pistar-css.php" />
+<script type="text/javascript" src="/functions.js"></script>
 <title>Pi-Star — Change Default Password</title>
 </head>
 <body>
@@ -151,24 +175,53 @@ if (!empty($_POST['adminPassword'])) {
 <?php } else { ?>
   <p>You are connecting from outside the local network and your dashboard is still using the
   factory default password. Set a new password to continue.</p>
-<?php if ($passwordRejected) { ?>
-  <p style="color: #f01010;"><b>Password rejected.</b> The new password must be different from
-  the default, must not contain NUL / CR / LF bytes, must be at most 256 bytes long, and must
-  satisfy the system password-quality rules.</p>
+<?php if ($passwordRejected) {
+        // Distinct message per rejection class so the operator knows
+        // exactly what to fix without having to guess.
+        switch ($rejectReason) {
+            case 'mismatch':
+                $msg = '<b>Passwords do not match.</b> Please enter the same value in both fields.';
+                break;
+            case 'default':
+                $msg = '<b>Password rejected.</b> The new password must be different from the factory default.';
+                break;
+            case 'pam':
+                $msg = '<b>Password rejected by the system.</b> It must satisfy the system password-quality rules (length, complexity, history).';
+                break;
+            case 'invalid':
+            default:
+                $msg = '<b>Password rejected.</b> It must not contain NUL / CR / LF bytes and must be at most 256 bytes long.';
+                break;
+        }
+?>
+  <p style="color: #f01010;"><?php echo $msg; ?></p>
 <?php } ?>
-  <form action="/admin/change_password_required.php" method="post" autocomplete="off">
+  <form id="adminPassForm" action="/admin/change_password_required.php" method="post" autocomplete="off">
     <?php echo csrf_field_html(); ?>
     <table>
       <tr>
-        <td align="right" width="40%"><label for="adminPassword">New password:</label></td>
+        <td align="right" width="40%"><label for="pass1">New password:</label></td>
         <td align="left">
-          <input type="password" name="adminPassword" id="adminPassword"
-                 size="32" autocomplete="new-password" required="required" />
+          <input type="password" name="adminPassword" id="pass1"
+                 size="32" autocomplete="new-password"
+                 onkeyup="checkPass(); return false;" required="required" />
+        </td>
+      </tr>
+      <tr>
+        <td align="right"><label for="pass2">Confirm password:</label></td>
+        <td align="left">
+          <input type="password" name="adminPasswordConfirm" id="pass2"
+                 size="32" autocomplete="new-password"
+                 onkeyup="checkPass(); return false;" required="required" />
         </td>
       </tr>
       <tr>
         <td colspan="2" align="center">
-          <input type="submit" value="Change Password" />
+          <!-- id="submitpwd" matches the existing checkPass() in
+               functions.js which enables this button only when both
+               fields match. Server still re-verifies, so the JS gate
+               is UX, not security. -->
+          <input type="submit" id="submitpwd" value="Change Password" disabled="disabled" />
         </td>
       </tr>
     </table>
