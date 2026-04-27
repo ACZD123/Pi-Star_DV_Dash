@@ -61,7 +61,7 @@ require_once('../config/version.php');
 // Do some file wrangling...
 exec('sudo cp /etc/dstarrepeater /tmp/ZHN0YXJyZXBlYXRlcg.tmp');
 exec('sudo chown www-data:www-data /tmp/ZHN0YXJyZXBlYXRlcg.tmp');
-exec('sudo chmod 664 /tmp/ZHN0YXJyZXBlYXRlcg.tmp');
+exec('sudo chmod 600 /tmp/ZHN0YXJyZXBlYXRlcg.tmp');
 
 // ini file to open
 $filepath = '/tmp/ZHN0YXJyZXBlYXRlcg.tmp';

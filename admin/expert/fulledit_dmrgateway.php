@@ -60,7 +60,7 @@ if(isset($_POST['data'])) {
         // File Wrangling
         exec('sudo cp /etc/dmrgateway /tmp/fmehg65694eg.tmp');
         exec('sudo chown www-data:www-data /tmp/fmehg65694eg.tmp');
-        exec('sudo chmod 664 /tmp/fmehg65694eg.tmp');
+        exec('sudo chmod 600 /tmp/fmehg65694eg.tmp');
 
         // Open the file and write the data
         $filepath = '/tmp/fmehg65694eg.tmp';
@@ -85,7 +85,7 @@ if(isset($_POST['data'])) {
         // File Wrangling
         exec('sudo cp /etc/dmrgateway /tmp/fmehg65694eg.tmp');
         exec('sudo chown www-data:www-data /tmp/fmehg65694eg.tmp');
-        exec('sudo chmod 664 /tmp/fmehg65694eg.tmp');
+        exec('sudo chmod 600 /tmp/fmehg65694eg.tmp');
 
         // Open the file and read it
         $filepath = '/tmp/fmehg65694eg.tmp';

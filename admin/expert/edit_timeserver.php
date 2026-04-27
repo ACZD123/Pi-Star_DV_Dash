@@ -60,7 +60,7 @@ require_once('../config/version.php');
 // Do some file wrangling...
 exec('sudo cp /etc/timeserver /tmp/dGltZXNlcnZlcg.tmp');
 exec('sudo chown www-data:www-data /tmp/dGltZXNlcnZlcg.tmp');
-exec('sudo chmod 664 /tmp/dGltZXNlcnZlcg.tmp');
+exec('sudo chmod 600 /tmp/dGltZXNlcnZlcg.tmp');
 
 // ini file to open
 $filepath = '/tmp/dGltZXNlcnZlcg.tmp';

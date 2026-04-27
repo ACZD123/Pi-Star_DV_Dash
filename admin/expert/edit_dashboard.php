@@ -106,7 +106,7 @@ if (!file_exists('/etc/pistar-css.ini')) {
 //Do some file wrangling...
 exec('sudo cp /etc/pistar-css.ini /tmp/bW1kd4jg6b3N0DQo.tmp');
 exec('sudo chown www-data:www-data /tmp/bW1kd4jg6b3N0DQo.tmp');
-exec('sudo chmod 664 /tmp/bW1kd4jg6b3N0DQo.tmp');
+exec('sudo chmod 600 /tmp/bW1kd4jg6b3N0DQo.tmp');
 
 //ini file to open
 $filepath = '/tmp/bW1kd4jg6b3N0DQo.tmp';

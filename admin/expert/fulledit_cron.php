@@ -232,7 +232,7 @@ if(isset($_POST['data'])) {
                 // File Wrangling
                 exec('sudo cp /etc/crontab /tmp/a8h4d8n3c83h4.tmp');
                 exec('sudo chown www-data:www-data /tmp/a8h4d8n3c83h4.tmp');
-                exec('sudo chmod 664 /tmp/a8h4d8n3c83h4.tmp');
+                exec('sudo chmod 600 /tmp/a8h4d8n3c83h4.tmp');
 
                 // Open the file and write the data
                 $filepath = '/tmp/a8h4d8n3c83h4.tmp';
@@ -254,7 +254,7 @@ if(isset($_POST['data'])) {
         // File Wrangling
         exec('sudo cp /etc/crontab /tmp/a8h4d8n3c83h4.tmp');
         exec('sudo chown www-data:www-data /tmp/a8h4d8n3c83h4.tmp');
-        exec('sudo chmod 664 /tmp/a8h4d8n3c83h4.tmp');
+        exec('sudo chmod 600 /tmp/a8h4d8n3c83h4.tmp');
 
         // Open the file and read it
         $filepath = '/tmp/a8h4d8n3c83h4.tmp';

@@ -69,7 +69,7 @@ if (file_exists('/etc/dapnetapi.key')) {
 }
 
 //Do some file wrangling...
-exec('sudo chmod 664 /tmp/jsADGHwf9sj294.tmp');
+exec('sudo chmod 600 /tmp/jsADGHwf9sj294.tmp');
 
 //ini file to open
 $filepath = '/tmp/jsADGHwf9sj294.tmp';

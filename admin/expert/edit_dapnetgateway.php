@@ -69,7 +69,7 @@ require_once('../config/version.php');
 // Do some file wrangling...
 exec('sudo cp /etc/dapnetgateway /tmp/oXyEVXYSisDX.tmp');
 exec('sudo chown www-data:www-data /tmp/oXyEVXYSisDX.tmp');
-exec('sudo chmod 664 /tmp/oXyEVXYSisDX.tmp');
+exec('sudo chmod 600 /tmp/oXyEVXYSisDX.tmp');
 
 // ini file to open
 $filepath = '/tmp/oXyEVXYSisDX.tmp';

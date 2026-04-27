@@ -58,7 +58,7 @@ require_once('../config/version.php');
 // Do some file wrangling...
 exec('sudo cp /etc/starnetserver /tmp/c3Rhcm5ldHNlcnZlcg.tmp');
 exec('sudo chown www-data:www-data /tmp/c3Rhcm5ldHNlcnZlcg.tmp');
-exec('sudo chmod 664 /tmp/c3Rhcm5ldHNlcnZlcg.tmp');
+exec('sudo chmod 600 /tmp/c3Rhcm5ldHNlcnZlcg.tmp');
 
 // ini file to open
 $filepath = '/tmp/c3Rhcm5ldHNlcnZlcg.tmp';

@@ -69,7 +69,7 @@ require_once('../config/version.php');
 //Do some file wrangling...
 exec('sudo cp /etc/mmdvmhost /tmp/bW1kdm1ob3N0DQo.tmp');
 exec('sudo chown www-data:www-data /tmp/bW1kdm1ob3N0DQo.tmp');
-exec('sudo chmod 664 /tmp/bW1kdm1ob3N0DQo.tmp');
+exec('sudo chmod 600 /tmp/bW1kdm1ob3N0DQo.tmp');
 
 //ini file to open
 $filepath = '/tmp/bW1kdm1ob3N0DQo.tmp';

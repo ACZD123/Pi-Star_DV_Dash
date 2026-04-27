@@ -69,7 +69,7 @@ require_once('../config/version.php');
 // Do some file wrangling...
 exec('sudo cp /etc/p25gateway /tmp/aFE45dgs4tFS.tmp');
 exec('sudo chown www-data:www-data /tmp/aFE45dgs4tFS.tmp');
-exec('sudo chmod 664 /tmp/aFE45dgs4tFS.tmp');
+exec('sudo chmod 600 /tmp/aFE45dgs4tFS.tmp');
 
 // ini file to open
 $filepath = '/tmp/aFE45dgs4tFS.tmp';

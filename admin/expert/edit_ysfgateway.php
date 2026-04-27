@@ -69,7 +69,7 @@ require_once('../config/version.php');
 // Do some file wrangling...
 exec('sudo cp /etc/ysfgateway /tmp/eXNmZ2F0ZXdheQ.tmp');
 exec('sudo chown www-data:www-data /tmp/eXNmZ2F0ZXdheQ.tmp');
-exec('sudo chmod 664 /tmp/eXNmZ2F0ZXdheQ.tmp');
+exec('sudo chmod 600 /tmp/eXNmZ2F0ZXdheQ.tmp');
 
 // ini file to open
 $filepath = '/tmp/eXNmZ2F0ZXdheQ.tmp';

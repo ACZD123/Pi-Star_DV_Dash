@@ -66,7 +66,7 @@ if (file_exists('/etc/bmapi.key')) {
   exec('sudo echo "apikey=None" >> /tmp/d39fk36sg55433gd.tmp');
 }
 exec('sudo chown www-data:www-data /tmp/d39fk36sg55433gd.tmp');
-exec('sudo chmod 664 /tmp/d39fk36sg55433gd.tmp');
+exec('sudo chmod 600 /tmp/d39fk36sg55433gd.tmp');
 
 //ini file to open
 $filepath = '/tmp/d39fk36sg55433gd.tmp';

@@ -58,7 +58,7 @@ if(isset($_POST['data'])) {
         // File Wrangling
         exec('sudo cp /usr/local/etc/RSSI.dat /tmp/yAw432GHs5.tmp');
         exec('sudo chown www-data:www-data /tmp/yAw432GHs5.tmp');
-        exec('sudo chmod 664 /tmp/yAw432GHs5.tmp');
+        exec('sudo chmod 600 /tmp/yAw432GHs5.tmp');
 
         // Open the file and write the data
         $filepath = '/tmp/yAw432GHs5.tmp';
@@ -79,7 +79,7 @@ if(isset($_POST['data'])) {
         // File Wrangling
         exec('sudo cp /usr/local/etc/RSSI.dat /tmp/yAw432GHs5.tmp');
         exec('sudo chown www-data:www-data /tmp/yAw432GHs5.tmp');
-        exec('sudo chmod 664 /tmp/yAw432GHs5.tmp');
+        exec('sudo chmod 600 /tmp/yAw432GHs5.tmp');
 
         // Open the file and read it
         $filepath = '/tmp/yAw432GHs5.tmp';

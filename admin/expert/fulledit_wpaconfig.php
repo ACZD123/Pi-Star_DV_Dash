@@ -59,7 +59,7 @@ if(isset($_POST['data'])) {
         // File Wrangling
         exec('sudo cp /etc/wpa_supplicant/wpa_supplicant.conf /tmp/k45s7h5s9k3.tmp');
         exec('sudo chown www-data:www-data /tmp/k45s7h5s9k3.tmp');
-        exec('sudo chmod 664 /tmp/k45s7h5s9k3.tmp');
+        exec('sudo chmod 600 /tmp/k45s7h5s9k3.tmp');
 
         // Open the file and write the data
         $filepath = '/tmp/k45s7h5s9k3.tmp';
@@ -84,7 +84,7 @@ if(isset($_POST['data'])) {
         // File Wrangling
         exec('sudo cp /etc/wpa_supplicant/wpa_supplicant.conf /tmp/k45s7h5s9k3.tmp');
         exec('sudo chown www-data:www-data /tmp/k45s7h5s9k3.tmp');
-        exec('sudo chmod 664 /tmp/k45s7h5s9k3.tmp');
+        exec('sudo chmod 600 /tmp/k45s7h5s9k3.tmp');
 
         // Open the file and read it
         $filepath = '/tmp/k45s7h5s9k3.tmp';

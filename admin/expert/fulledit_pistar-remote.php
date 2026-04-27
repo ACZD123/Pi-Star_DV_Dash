@@ -58,7 +58,7 @@ if(isset($_POST['data'])) {
         // File Wrangling
         exec('sudo cp /etc/pistar-remote /tmp/fmehg65934eg.tmp');
         exec('sudo chown www-data:www-data /tmp/fmehg65934eg.tmp');
-        exec('sudo chmod 664 /tmp/fmehg65934eg.tmp');
+        exec('sudo chmod 600 /tmp/fmehg65934eg.tmp');
 
         // Open the file and write the data
         $filepath = '/tmp/fmehg65934eg.tmp';
@@ -82,7 +82,7 @@ if(isset($_POST['data'])) {
         // File Wrangling
         exec('sudo cp /etc/pistar-remote /tmp/fmehg65934eg.tmp');
         exec('sudo chown www-data:www-data /tmp/fmehg65934eg.tmp');
-        exec('sudo chmod 664 /tmp/fmehg65934eg.tmp');
+        exec('sudo chmod 600 /tmp/fmehg65934eg.tmp');
 
         // Open the file and read it
         $filepath = '/tmp/fmehg65934eg.tmp';

@@ -69,7 +69,7 @@ require_once('../config/version.php');
 //Do some file wrangling...
 exec('sudo cp /etc/dmrgateway /tmp/fmehg65694eg.tmp');
 exec('sudo chown www-data:www-data /tmp/fmehg65694eg.tmp');
-exec('sudo chmod 664 /tmp/fmehg65694eg.tmp');
+exec('sudo chmod 600 /tmp/fmehg65694eg.tmp');
 
 //ini file to open
 $filepath = '/tmp/fmehg65694eg.tmp';
