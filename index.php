@@ -241,18 +241,13 @@ if (file_exists('/etc/dstar-radio.mmdvmhost')) {
     if ($_SERVER["PHP_SELF"] == "/admin/index.php") {               // Admin Only Options
                 include 'mmdvmhost/bm_manager.php';                     // BM DMR Link Manager
         }
-    if ($_SERVER["PHP_SELF"] == "/admin/index.php") {         // Admin Only Option
-        echo '<script type="text/javascript">'."\n";
-            echo 'function reloadtgifConnections(){'."\n";
-            echo '  $("#tgifConnects").load("/mmdvmhost/tgif_links.php",function(){ setTimeout(reloadtgifConnections,180000) });'."\n";
-            echo '}'."\n";
-            echo 'setTimeout(reloadtgifConnections,180000);'."\n";
-        echo '$(window).trigger(\'resize\');'."\n";
-            echo '</script>'."\n";
-            echo '<div id="tgifConnects">'."\n";
-        include 'mmdvmhost/tgif_links.php';            // TGIF Links
-        echo '</div>'."\n";
-    }
+    // Note: the live TGIF connections panel was removed in late
+    // 2026 because TGIF retired the underlying read-only REST API
+    // (http://tgif.network:5040/api/sessions now returns a 404
+    // page). The replacement is a Socket.IO + browser-session-token
+    // flow that doesn't fit a backend-rendered hotspot dashboard.
+    // The TGIF link/unlink manager below stays — its
+    // /api/sessions/update/{id}/{slot}/{tg} endpoint is still alive.
     if ($_SERVER["PHP_SELF"] == "/admin/index.php") {               // Admin Only Options
                 include 'mmdvmhost/tgif_manager.php';            // TGIF DMR Link Manager
         }

@@ -9,11 +9,21 @@
  *   tgifAction  — LINK or UNLINK (UNLINK uses default TG 4000)
  *
  * On submit, makes an HTTP GET to
- * http://tgif.network:5040/api/sessions/update/... and triggers a 3 s
- * `setTimeout` reload so the panel re-fetches.
+ * http://tgif.network:5040/api/sessions/update/{id}/{slot}/{tg}
+ * and triggers a 3 s `setTimeout` reload of the parent page.
  *
- * NOTE for the security pass: API is plain HTTP, and no
- * setEmbeddableSecurityHeaders() call in this file. Coverage gap.
+ * UPSTREAM API NOTE: TGIF retired the read-only `/api/sessions`
+ * endpoint in late 2026 (now 404), and replaced active-TG visibility
+ * with a Socket.IO + browser-session-token flow that doesn't fit a
+ * backend-rendered hotspot dashboard. The live "Active TGIF
+ * Connections" panel that used to sit above this form has been
+ * removed for that reason. The link/unlink update endpoint this
+ * file uses is still alive on plain HTTP — there's no HTTPS
+ * variant on :5040, and tightening that side is gated on TGIF
+ * shipping a documented replacement.
+ *
+ * Operators who want to see the current TG state should visit
+ * https://tgif.network/profile.php?tab=SelfCare directly.
  */
 
 if ($_SERVER["PHP_SELF"] == "/admin/index.php") { // Stop this working outside of the admin page
