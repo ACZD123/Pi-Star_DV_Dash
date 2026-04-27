@@ -60,14 +60,22 @@ csrf_verify();
 <br />
 
 <?php if (!empty($_POST)):
-if (preg_match('/[^A-Z]/',$_POST["Link"])) { unset ($_POST["Link"]);}
-if ($_POST["Link"] == "LINK") {
-    if (preg_match('/[^A-Z0-9]/',$_POST["RefName"])) { unset ($_POST["RefName"]);}
-    if (preg_match('/[^A-Z]/',$_POST["Letter"])) { unset ($_POST["Letter"]);}
-    if (preg_match('/[^A-Z0-9 ]/',$_POST["Module"])) { unset ($_POST["Module"]);}
+// Each $_POST read uses the `?? ''` null-coalesce so that:
+//   - a missing key (Link / RefName / Letter / Module never sent) and
+//   - a key unset by the preg_match sanitiser below (e.g. Link
+//     contained non-uppercase chars and was unset)
+// both resolve to '' instead of triggering PHP 8's "Undefined array
+// key" E_WARNING. Behaviour is unchanged: '' fails every "X" == "Y"
+// comparison the way an undefined key did under PHP 7's E_NOTICE.
+// `(... ?? '')` is parenthesised because == binds tighter than ??.
+if (preg_match('/[^A-Z]/', $_POST["Link"] ?? '')) { unset ($_POST["Link"]);}
+if (($_POST["Link"] ?? '') == "LINK") {
+    if (preg_match('/[^A-Z0-9]/', $_POST["RefName"] ?? '')) { unset ($_POST["RefName"]);}
+    if (preg_match('/[^A-Z]/', $_POST["Letter"] ?? '')) { unset ($_POST["Letter"]);}
+    if (preg_match('/[^A-Z0-9 ]/', $_POST["Module"] ?? '')) { unset ($_POST["Module"]);}
     }
-if ($_POST["Link"] == "UNLINK") {
-    if (preg_match('/[^A-Z0-9 ]/',$_POST["Module"])) { unset ($_POST["Module"]);}
+if (($_POST["Link"] ?? '') == "UNLINK") {
+    if (preg_match('/[^A-Z0-9 ]/', $_POST["Module"] ?? '')) { unset ($_POST["Module"]);}
     }
 if (empty($_POST["RefName"]) || empty($_POST["Letter"]) || empty($_POST["Module"])) { echo "Somthing wrong with your input, try again";}
 
@@ -86,7 +94,7 @@ else {
     $unlinkCommand = "sudo remotecontrold \"".$module."\" unlink";
     $linkCommand = "sudo remotecontrold \"".$module."\" link never \"".$targetRef."\"";
 
-    if ($_POST["Link"] == "LINK") {
+    if (($_POST["Link"] ?? '') == "LINK") {
         echo "<b>Reflector Connector</b>\n";
         echo "<table>\n<tr><th><a class=tooltip href=\"#\">Command Output<span><b>Command Output</b></span></th></tr>\n<tr><td>";
         // remotecontrold output is text from the daemon; escape on
@@ -95,7 +103,7 @@ else {
         echo htmlspecialchars((string)exec($linkCommand), ENT_QUOTES, 'UTF-8');
         echo "</tr></td>\n</table>\n";
         }
-    if ($_POST["Link"] == "UNLINK") {
+    if (($_POST["Link"] ?? '') == "UNLINK") {
         echo "<b>Reflector Connector</b>\n";
         echo "<table>\n<tr><th><a class=tooltip href=\"#\">Command Output<span><b>Command Output</b></span></th></tr>\n<tr><td>";
         echo htmlspecialchars((string)exec($unlinkCommand), ENT_QUOTES, 'UTF-8');
