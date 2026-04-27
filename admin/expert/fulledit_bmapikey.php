@@ -98,6 +98,11 @@ if($_POST) {
             $content .= "[".$section."]\n";
             //append the values
             foreach($values as $key=>$value) {
+                // Strip CR/LF from values before they reach the INI
+                // line. Same rationale as fulledit_dapnetapi.php: a
+                // newline inside $value would split into a fresh
+                // INI line and let an attacker inject extra keys.
+                $value = str_replace(array("\r", "\n"), "", (string)$value);
                 if ($value == '') {
           $content .= $key."=none\n";
         } else {

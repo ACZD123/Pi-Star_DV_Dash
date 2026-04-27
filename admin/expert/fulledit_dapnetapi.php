@@ -102,6 +102,14 @@ if($_POST) {
             $content .= "[".$section."]\n";
             //append the values
             foreach($values as $key=>$value) {
+                // Strip CR/LF from values before they land in the INI
+                // file. The save handler writes `$key=$value\n` and a
+                // newline inside $value would split the value into a
+                // new INI line, allowing injection of arbitrary
+                // additional keys (e.g. `value=foo\nDEBUG=1`). On a
+                // single-operator device the practical risk is low
+                // but the sanitiser is one line.
+                $value = str_replace(array("\r", "\n"), "", (string)$value);
                 $content .= $key."=".$value."\n";
             }
             $content .= "\n";
