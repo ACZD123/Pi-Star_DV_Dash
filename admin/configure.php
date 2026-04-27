@@ -25,10 +25,13 @@
  * inside a stop-everything → write → start-everything envelope.
  *
  * Special paths:
- *   - Factory reset (line ~410): unzips /usr/local/bin/config_clean.zip
- *     into /etc/, removes /etc/dstar-radio.* and /etc/pistar-css.ini,
- *     and resets the dashboard / sbin / bin git checkouts to
- *     origin/master.
+ *   - Factory reset (line ~575): hands off to the
+ *     /usr/local/sbin/pistar-factory-reset --really wrapper, which
+ *     unzips /usr/local/bin/config_clean.zip into /etc/, removes the
+ *     /etc/dstar-radio.* and /etc/pistar-css.ini markers, and resets
+ *     the dashboard / sbin / bin git checkouts to origin/master under
+ *     its own mount-rw / sync*3 / remount-ro envelope. Wrapping kept
+ *     the seven discrete sudo calls out of the dashboard's sudoers.
  *   - Admin password change: `htpasswd -b` plus `sudo passwd pi-star`.
  *   - AutoAP toggle: presence of /etc/hostap.off marker file.
  *   - Mode switch: presence of /etc/dstar-radio.mmdvmhost vs
@@ -580,17 +583,24 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
           echo "</table>\n";
           unset($_POST);
 
-      // Over-write the config files with the clean copies
-      exec('sudo unzip -o /usr/local/bin/config_clean.zip -d /etc/');
-      exec('sudo rm -rf /etc/dstar-radio.*');
-      exec('sudo rm -rf /etc/pistar-css.ini');
-      exec('sudo git --work-tree=/usr/local/sbin --git-dir=/usr/local/sbin/.git update-index --assume-unchanged pistar-upnp.service');
-      exec('sudo git --work-tree=/usr/local/sbin --git-dir=/usr/local/sbin/.git reset --hard origin/master');
-      exec('sudo git --work-tree=/usr/local/bin --git-dir=/usr/local/bin/.git reset --hard origin/master');
-      exec('sudo git --work-tree=/var/www/dashboard --git-dir=/var/www/dashboard/.git reset --hard origin/master');
+      // Factory reset — restore /etc, /usr/local/sbin, /usr/local/bin
+      // and /var/www/dashboard to their shipped state. The chain
+      // (unzip /usr/local/bin/config_clean.zip into /etc/, rm -rf the
+      // dstar-radio.* and pistar-css.ini markers, then `git reset
+      // --hard origin/master` against the three trees) is now wrapped
+      // by /usr/local/sbin/pistar-factory-reset so the dashboard can
+      // hand the destruction off via a single allowlistable sudo call
+      // instead of seven separate ones. The wrapper handles its own
+      // mount-rw + trap'd sync*3 + remount-ro envelope, so we don't
+      // re-seal the rootfs here.
+      //
+      // The wrapper requires --really as a CLI safety net so a stray
+      // `sudo pistar-factory-reset` can't nuke the device by accident.
+      // Reaching this code path already required the operator to type
+      // RESET in the server-validated factoryResetConfirm field below
+      // (see edit_dashboard.php) — this is belt-and-braces.
+      exec('sudo /usr/local/sbin/pistar-factory-reset --really');
           echo '<script type="text/javascript">setTimeout(function() { window.location=window.location;},5000);</script>';
-      // Make the root filesystem read-only
-          system('sudo sync && sudo sync && sudo sync && sudo mount -o remount,ro /');
       echo "<br />\n</div>\n";
           echo "<div class=\"footer\">\nPi-Star web config, &copy; Andy Taylor (MW0MWZ) 2014-".date("Y").".<br />\n";
           echo "Need help? Click <a style=\"color: #ffffff;\" href=\"https://www.facebook.com/groups/pistarusergroup/\" target=\"_new\">here for the Support Group</a><br />\n";
@@ -3274,9 +3284,12 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
         $success = fwrite($handleMMDVMHostConfig, $mmdvmContent);
         fclose($handleMMDVMHostConfig);
         if (intval(exec('cat /tmp/bW1kdm1ob3N0DQo.tmp | wc -l')) > 140 ) {
-            exec('sudo mv /tmp/bW1kdm1ob3N0DQo.tmp /etc/mmdvmhost');        // Move the file back
-            exec('sudo chmod 644 /etc/mmdvmhost');                    // Set the correct runtime permissions
-            exec('sudo chown root:root /etc/mmdvmhost');                // Set the owner
+            // Atomic install: content + mode + owner set in one syscall
+            // sequence (B5 / L-5 pattern). Replaces the prior mv +
+            // chmod + chown trio. install does not consume the source,
+            // so the staging /tmp file is unlinked PHP-side after.
+            exec('sudo install -m 644 -o root -g root /tmp/bW1kdm1ob3N0DQo.tmp /etc/mmdvmhost');
+            @unlink('/tmp/bW1kdm1ob3N0DQo.tmp');
         }
     }
 
@@ -3312,9 +3325,9 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
             $success = fwrite($handleYSFGWconfig, $ysfgwContent);
             fclose($handleYSFGWconfig);
         if (intval(exec('cat /tmp/eXNmZ2F0ZXdheQ.tmp | wc -l')) > 35 ) {
-            exec('sudo mv /tmp/eXNmZ2F0ZXdheQ.tmp /etc/ysfgateway');        // Move the file back
-            exec('sudo chmod 644 /etc/ysfgateway');                    // Set the correct runtime permissions
-            exec('sudo chown root:root /etc/ysfgateway');                // Set the owner
+            // Atomic install — see the mmdvmhost block above for rationale.
+            exec('sudo install -m 644 -o root -g root /tmp/eXNmZ2F0ZXdheQ.tmp /etc/ysfgateway');
+            @unlink('/tmp/eXNmZ2F0ZXdheQ.tmp');
         }
     }
 
@@ -3350,9 +3363,9 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
             $success = fwrite($handleNXDNGWconfig, $nxdngwContent);
             fclose($handleNXDNGWconfig);
         if ( (intval(exec('cat /tmp/kXKwkDKy793HF5.tmp | wc -l')) > 30 ) && (file_exists('/etc/nxdngateway')) ) {
-            exec('sudo mv /tmp/kXKwkDKy793HF5.tmp /etc/nxdngateway');        // Move the file back
-            exec('sudo chmod 644 /etc/nxdngateway');                // Set the correct runtime permissions
-            exec('sudo chown root:root /etc/nxdngateway');                // Set the owner
+            // Atomic install — see the mmdvmhost block above for rationale.
+            exec('sudo install -m 644 -o root -g root /tmp/kXKwkDKy793HF5.tmp /etc/nxdngateway');
+            @unlink('/tmp/kXKwkDKy793HF5.tmp');
         }
     }
 
@@ -3388,9 +3401,9 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
             $success = fwrite($handleP25GWconfig, $p25gwContent);
             fclose($handleP25GWconfig);
         if ( (intval(exec('cat /tmp/sJSySkheSgrelJX.tmp | wc -l')) > 30 ) && (file_exists('/etc/p25gateway')) ) {
-            exec('sudo mv /tmp/sJSySkheSgrelJX.tmp /etc/p25gateway');        // Move the file back
-            exec('sudo chmod 644 /etc/p25gateway');                    // Set the correct runtime permissions
-            exec('sudo chown root:root /etc/p25gateway');                // Set the owner
+            // Atomic install — see the mmdvmhost block above for rationale.
+            exec('sudo install -m 644 -o root -g root /tmp/sJSySkheSgrelJX.tmp /etc/p25gateway');
+            @unlink('/tmp/sJSySkheSgrelJX.tmp');
         }
     }
 
@@ -3426,9 +3439,9 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
             $success = fwrite($handleM17GWconfig, $m17gwContent);
             fclose($handleM17GWconfig);
         if ( (intval(exec('cat /tmp/spNcSdRUEmySTo9.tmp | wc -l')) > 30 ) && (file_exists('/etc/m17gateway')) ) {
-            exec('sudo mv /tmp/spNcSdRUEmySTo9.tmp /etc/m17gateway');        // Move the file back
-            exec('sudo chmod 644 /etc/m17gateway');                    // Set the correct runtime permissions
-            exec('sudo chown root:root /etc/m17gateway');                // Set the owner
+            // Atomic install — see the mmdvmhost block above for rationale.
+            exec('sudo install -m 644 -o root -g root /tmp/spNcSdRUEmySTo9.tmp /etc/m17gateway');
+            @unlink('/tmp/spNcSdRUEmySTo9.tmp');
         }
     }
 
@@ -3464,9 +3477,9 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
                 $success = fwrite($handleYSF2DMRconfig, $ysf2dmrContent);
                 fclose($handleYSF2DMRconfig);
                 if (intval(exec('cat /tmp/dsWGR34tHRrSFFGA.tmp | wc -l')) > 35 ) {
-                        exec('sudo mv /tmp/dsWGR34tHRrSFFGA.tmp /etc/ysf2dmr');                 // Move the file back
-                        exec('sudo chmod 644 /etc/ysf2dmr');                                    // Set the correct runtime permissions
-                        exec('sudo chown root:root /etc/ysf2dmr');                              // Set the owner
+                        // Atomic install — see the mmdvmhost block above for rationale.
+                        exec('sudo install -m 644 -o root -g root /tmp/dsWGR34tHRrSFFGA.tmp /etc/ysf2dmr');
+                        @unlink('/tmp/dsWGR34tHRrSFFGA.tmp');
                 }
         }
 
@@ -3500,9 +3513,9 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
                 $success = fwrite($handleYSF2NXDNconfig, $ysf2nxdnContent);
                 fclose($handleYSF2NXDNconfig);
                 if (intval(exec('cat /tmp/dsWGR34tHRrSFFGb.tmp | wc -l')) > 35 ) {
-                        exec('sudo mv /tmp/dsWGR34tHRrSFFGb.tmp /etc/ysf2nxdn');                 // Move the file back
-                        exec('sudo chmod 644 /etc/ysf2nxdn');                                    // Set the correct runtime permissions
-                        exec('sudo chown root:root /etc/ysf2nxdn');                              // Set the owner
+                        // Atomic install — see the mmdvmhost block above for rationale.
+                        exec('sudo install -m 644 -o root -g root /tmp/dsWGR34tHRrSFFGb.tmp /etc/ysf2nxdn');
+                        @unlink('/tmp/dsWGR34tHRrSFFGb.tmp');
                 }
         }
 
@@ -3536,9 +3549,9 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
                 $success = fwrite($handleYSF2P25config, $ysf2p25Content);
                 fclose($handleYSF2P25config);
                 if (intval(exec('cat /tmp/dsWGR34tHRrSFFGc.tmp | wc -l')) > 25 ) {
-                        exec('sudo mv /tmp/dsWGR34tHRrSFFGc.tmp /etc/ysf2p25');                 // Move the file back
-                        exec('sudo chmod 644 /etc/ysf2p25');                                    // Set the correct runtime permissions
-                        exec('sudo chown root:root /etc/ysf2p25');                              // Set the owner
+                        // Atomic install — see the mmdvmhost block above for rationale.
+                        exec('sudo install -m 644 -o root -g root /tmp/dsWGR34tHRrSFFGc.tmp /etc/ysf2p25');
+                        @unlink('/tmp/dsWGR34tHRrSFFGc.tmp');
                 }
         }
 
@@ -3573,9 +3586,9 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
             $success = fwrite($handleDGIdGatewayConfig, $dgidgatewayContent);
             fclose($handleDGIdGatewayConfig);
             if (intval(exec('cat /tmp/cu0G4tG3CA45Z9B.tmp | wc -l')) > 25 ) {
-                exec('sudo mv /tmp/cu0G4tG3CA45Z9B.tmp /etc/dgidgateway');        // Move the file back
-                exec('sudo chmod 644 /etc/dgidgateway');                // Set the correct runtime permissions
-                exec('sudo chown root:root /etc/dgidgateway');                // Set the owner
+                // Atomic install — see the mmdvmhost block above for rationale.
+                exec('sudo install -m 644 -o root -g root /tmp/cu0G4tG3CA45Z9B.tmp /etc/dgidgateway');
+                @unlink('/tmp/cu0G4tG3CA45Z9B.tmp');
             }
         }
     }
@@ -3610,9 +3623,9 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
                 $success = fwrite($handleDMR2YSFconfig, $dmr2ysfContent);
                 fclose($handleDMR2YSFconfig);
                 if (intval(exec('cat /tmp/dhJSgdy7755HGc.tmp | wc -l')) > 25 ) {
-                        exec('sudo mv /tmp/dhJSgdy7755HGc.tmp /etc/dmr2ysf');        // Move the file back
-                        exec('sudo chmod 644 /etc/dmr2ysf');                // Set the correct runtime permissions
-                        exec('sudo chown root:root /etc/dmr2ysf');            // Set the owner
+                        // Atomic install — see the mmdvmhost block above for rationale.
+                        exec('sudo install -m 644 -o root -g root /tmp/dhJSgdy7755HGc.tmp /etc/dmr2ysf');
+                        @unlink('/tmp/dhJSgdy7755HGc.tmp');
                 }
         }
 
@@ -3646,9 +3659,9 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
                 $success = fwrite($handleDMR2NXDNconfig, $dmr2nxdnContent);
                 fclose($handleDMR2NXDNconfig);
                 if (intval(exec('cat /tmp/nthfheS55HGc.tmp | wc -l')) > 25 ) {
-                        exec('sudo mv /tmp/nthfheS55HGc.tmp /etc/dmr2nxdn');        // Move the file back
-                        exec('sudo chmod 644 /etc/dmr2nxdn');                // Set the correct runtime permissions
-                        exec('sudo chown root:root /etc/dmr2nxdn');            // Set the owner
+                        // Atomic install — see the mmdvmhost block above for rationale.
+                        exec('sudo install -m 644 -o root -g root /tmp/nthfheS55HGc.tmp /etc/dmr2nxdn');
+                        @unlink('/tmp/nthfheS55HGc.tmp');
                 }
         }
 
@@ -3682,9 +3695,9 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
                 $success = fwrite($handledapnetconfig, $dapnetContent);
                 fclose($handledapnetconfig);
                 if (intval(exec('cat /tmp/lsHWie734HS.tmp | wc -l')) > 19 ) {
-                        exec('sudo mv /tmp/lsHWie734HS.tmp /etc/dapnetgateway');        // Move the file back
-                        exec('sudo chmod 644 /etc/dapnetgateway');                // Set the correct runtime permissions
-                        exec('sudo chown root:root /etc/dapnetgateway');            // Set the owner
+                        // Atomic install — see the mmdvmhost block above for rationale.
+                        exec('sudo install -m 644 -o root -g root /tmp/lsHWie734HS.tmp /etc/dapnetgateway');
+                        @unlink('/tmp/lsHWie734HS.tmp');
                 }
         }
 
@@ -3719,9 +3732,9 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
             fclose($handledmrGWconfig);
         if (fopen($dmrGatewayConfigFile,'r')) {
             if (intval(exec('cat /tmp/k4jhdd34jeFr8f.tmp | wc -l')) > 55 ) {
-                      exec('sudo mv /tmp/k4jhdd34jeFr8f.tmp /etc/dmrgateway');    // Move the file back
-                      exec('sudo chmod 644 /etc/dmrgateway');                // Set the correct runtime permissions
-                 exec('sudo chown root:root /etc/dmrgateway');            // Set the owner
+                      // Atomic install — see the mmdvmhost block above for rationale.
+                      exec('sudo install -m 644 -o root -g root /tmp/k4jhdd34jeFr8f.tmp /etc/dmrgateway');
+                      @unlink('/tmp/k4jhdd34jeFr8f.tmp');
             }
         }
     }

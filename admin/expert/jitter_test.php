@@ -37,8 +37,9 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/jitter_test.php") {
   } else { $target = "DMR+"; }
 
   if (!isset($_GET['ajax'])) {
-    system('sudo touch /var/log/pi-star/pi-star_icmptest.log > /dev/null 2>&1 &');
-    system('sudo echo "" > /var/log/pi-star/pi-star_icmptest.log > /dev/null 2>&1 &');
+    // truncate creates+clears the log file in one synchronous call —
+    // see admin/update.php for the full rationale.
+    system('sudo truncate -s 0 /var/log/pi-star/pi-star_icmptest.log');
     system('sudo /usr/local/sbin/pistar-jittertest '.$target.' > /dev/null 2>&1 &');
   }
 

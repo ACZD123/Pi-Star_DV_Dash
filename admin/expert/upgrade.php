@@ -37,8 +37,11 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/upgrade.php") {
 
   // Only proceed with upgrade if user has confirmed via POST submission
   if (!isset($_GET['ajax']) && !empty($_POST) && isset($_POST['confirm_update'])) {
-    system('sudo touch /var/log/pi-star/pi-star_upgrade.log > /dev/null 2>&1 &');
-    system('sudo echo "" > /var/log/pi-star/pi-star_upgrade.log > /dev/null 2>&1 &');
+    // truncate creates+clears in one synchronous call — see
+    // admin/update.php for the full rationale (the prior touch + echo
+    // redirect pair was racy under `&` and the `>` ran as www-data,
+    // defeating the sudo on the truncation step).
+    system('sudo truncate -s 0 /var/log/pi-star/pi-star_upgrade.log');
     system('sudo /usr/local/sbin/pistar-upgrade > /dev/null 2>&1 &');
     }
 

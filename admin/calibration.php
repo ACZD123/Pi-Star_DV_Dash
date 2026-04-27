@@ -3,10 +3,10 @@
  * Modem calibration UI.
  *
  * Three responsibilities, all served from this single endpoint:
- *   1. /admin/calibration.php?action=start  — kicks off a netcat
- *      listener piped through `sudo -i script` running
- *      /usr/local/sbin/pistar-mmdvmcal; output streams into
- *      /tmp/pi-star_mmdvmcal.log.
+ *   1. /admin/calibration.php?action=start  — invokes the
+ *      /usr/local/sbin/pistar-calibration-start wrapper, which owns
+ *      the localhost-bound nc UDP listener + script(1) + MMDVMCal
+ *      pipeline. Captured output streams into /tmp/pi-star_mmdvmcal.log.
  *   2. /admin/calibration.php?cmd=<single-letter>&param=<value> —
  *      sends commands to the running mmdvmcal process via UDP
  *      socket on 127.0.0.1:33273 (mmdvmcal's IPC port).
@@ -14,9 +14,11 @@
  *      using a session-stored byte offset so the browser can render
  *      the live calibration output and the BER chart.
  *
- *   4. /admin/calibration.php?action=saveoffset&param=<int> — runs
- *      sudo sed against /etc/mmdvmhost to persist the calibrated
- *      RX/TX offset (intval()-validated).
+ *   4. /admin/calibration.php?action=saveoffset&param=<int> — persists
+ *      the calibrated RX/TX offset by reading /etc/mmdvmhost,
+ *      preg_replace-ing RXOffset/TXOffset, and atomic-installing the
+ *      result (intval()-validated; see L-7 cleanup commit for why
+ *      this is no longer a sudo-sed pipeline).
  *
  * The form itself is mostly client-side JS (jQuery + plotly) that
  * sends commands and renders the rolling Bit Error Rate plot.
@@ -71,15 +73,30 @@ if ($_SERVER["PHP_SELF"] == "/admin/calibration.php") {
 
   if (isset($_POST['action'])) {
       if ($_POST['action'] === 'start') {
-          system('sudo fuser -k 33273/udp > /dev/null 2>&1');
-          // Bind nc to 127.0.0.1 only. Without `-s 127.0.0.1`, nc -ulp
-          // listens on 0.0.0.0:33273 — and while calibration is running
-          // any LAN device can send UDP to that port and have its bytes
-          // piped straight into pistar-mmdvmcal (which drives the radio
-          // modem's TX/RX). The dashboard sends commands locally
-          // (socket_bind('127.0.0.1', 33272) -> 127.0.0.1:33273), so
-          // restricting the listener to localhost loses no functionality.
-          system('nc -ulp 33273 -s 127.0.0.1 | sudo -i script -qfc "/usr/local/sbin/pistar-mmdvmcal" /tmp/pi-star_mmdvmcal.log > /dev/null 2>&1 &');
+          // Calibration is now driven by the pistar-calibration-start
+          // wrapper (in Pi-Star_Binaries_sbin), which owns the
+          // localhost-bound nc UDP listener + script(1) + MMDVMCal
+          // pipeline that this code used to run inline. The wrapper:
+          //   - binds nc to 127.0.0.1:33273 (the dashboard's IPC port —
+          //     unbound 0.0.0.0 would let any LAN device drive the
+          //     radio modem during calibration);
+          //   - holds a single-instance flock so a second click is a
+          //     no-op until the running session ends or is stopped;
+          //   - detaches via setsid so this system() call returns
+          //     immediately while the pipeline keeps running;
+          //   - writes captured output to /tmp/pi-star_mmdvmcal.log,
+          //     which the ?ajax tail loop below reads via session
+          //     byte-offset.
+          //
+          // Wrapping the pipeline as one allowlistable script kept
+          // `sudo -i script -qfc ...` out of the dashboard's sudoers
+          // — `sudo -i` is essentially "root login shell + run cmd"
+          // and can't be safely path-scoped. The sub-command `stop`
+          // tears down a running calibration via fuser + killall.
+          // Calling `stop` first is idempotent (no-op if nothing's
+          // running) and gives a clean slate before each fresh start.
+          system('sudo /usr/local/sbin/pistar-calibration-start stop > /dev/null 2>&1');
+          system('sudo /usr/local/sbin/pistar-calibration-start > /dev/null 2>&1');
       } elseif ($_POST['action'] === 'saveoffset') {
           if (isset($_POST['param']) && strlen($_POST['param'])) {
               // intval() forces an integer — mmdvmhost accepts a

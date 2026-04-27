@@ -51,8 +51,15 @@ if ($_SERVER["PHP_SELF"] == "/admin/update.php") {
       system('sudo chmod 775 /var/log/pi-star/');
       system('sudo chown root:mmdvm /var/log/pi-star/');
     }
-    system('sudo touch /var/log/pi-star/pi-star_update.log > /dev/null 2>&1 &');
-    system('sudo echo "" > /var/log/pi-star/pi-star_update.log > /dev/null 2>&1 &');
+    // Truncate creates the file if missing and clears it if existing —
+    // does the work the prior `sudo touch` + `sudo echo "" > log` pair
+    // tried to do. The earlier echo was buggy (the `>` redirect was
+    // run as www-data, not under sudo, so it could only ever truncate
+    // a www-data-writable file — a silent no-op when the log was last
+    // touched as root). Run synchronously, BEFORE the backgrounded
+    // pistar-update spawn, so the script's first writes always land
+    // in a freshly cleared file regardless of `&` scheduling.
+    system('sudo truncate -s 0 /var/log/pi-star/pi-star_update.log');
     system('sudo /usr/local/sbin/pistar-update > /dev/null 2>&1 &');
   }
 
