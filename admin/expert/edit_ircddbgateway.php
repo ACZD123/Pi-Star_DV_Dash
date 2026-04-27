@@ -57,19 +57,25 @@ require_once('../config/version.php');
   <div class="contentwide">
 
 <?php
-// Do some file wrangling...
-exec('sudo cp /etc/ircddbgateway /tmp/aXJjZGRiZ2F0ZXdheQ.tmp');
-exec('sudo chown www-data:www-data /tmp/aXJjZGRiZ2F0ZXdheQ.tmp');
-exec('sudo chmod 600 /tmp/aXJjZGRiZ2F0ZXdheQ.tmp');
-
-// ini file to open
-$filepath = '/tmp/aXJjZGRiZ2F0ZXdheQ.tmp';
-// Clean up the /tmp staging file on script exit so the
-// editor's potentially-secrets-bearing copy of /etc/<config>
-// doesn't persist between requests. @-suppression handles
-// the case where a sudo mv (e.g. fulledit_bmapikey) already
-// consumed the staging file before script end.
+// Stage a copy of /etc/ircddbgateway in /tmp under a random,
+// per-request name (A3-3). tempnam() creates the file mode 600
+// owned by the calling PHP-FPM user (www-data); the unguessable
+// suffix defeats the predictable-name TOCTOU class — an attacker
+// who knew the path could otherwise pre-create it as a symlink
+// to /etc/shadow or similar and have our `sudo cp` follow the
+// link and overwrite the target. Cleanup is registered up front
+// so the staging copy never persists past script exit, even on a
+// die() / fatal-error path. @-suppression handles the case where
+// a sudo mv path consumed the file before script end.
+$filepath = tempnam('/tmp', 'pistar-edit-');
 register_shutdown_function(function() use ($filepath) { @unlink($filepath); });
+exec('sudo cp /etc/ircddbgateway ' . escapeshellarg($filepath));
+// Defensively re-assert mode + owner. tempnam already created
+// the file 600 www-data, and `sudo cp` against an existing
+// regular file truncates-in-place (mode/owner preserved); these
+// remain as belt-and-braces to match the surrounding pattern.
+exec('sudo chown www-data:www-data ' . escapeshellarg($filepath));
+exec('sudo chmod 600 ' . escapeshellarg($filepath));
 
 // Mangle the input
 $file_content = "[ircddbgateway]\n".preg_replace('~\r\n?~', "\n", file_get_contents($filepath));
@@ -123,7 +129,12 @@ if($_POST) {
         // preg_replace and install the cleaned content directly —
         // drops the prior `sudo sed -i` from this code path (L-7).
         $etcContent  = preg_replace('/^\[ircddbgateway\]\r?\n/m', '', $content);
-        $etcStaging  = '/tmp/aXJjZGRiZ2F0ZXdheQ_etc.tmp';
+        // A3-3: per-request random staging file rather than a
+        // predictable hardcoded /tmp/<obf>.tmp path. tempnam() also
+        // creates the file mode 600 — and since this is a freshly
+        // created file (not yet referenced anywhere), there's no
+        // race for an attacker to swap in a symlink before our write.
+        $etcStaging  = tempnam('/tmp', 'pistar-edit-etc-');
         file_put_contents($etcStaging, $etcContent);
 
         // Atomic install: content + mode + owner set in one syscall

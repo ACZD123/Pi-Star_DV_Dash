@@ -59,18 +59,17 @@ require_once('../config/version.php');
 
 <?php
 // Do some file wrangling...
-exec('sudo cp /etc/dstarrepeater /tmp/ZHN0YXJyZXBlYXRlcg.tmp');
-exec('sudo chown www-data:www-data /tmp/ZHN0YXJyZXBlYXRlcg.tmp');
-exec('sudo chmod 600 /tmp/ZHN0YXJyZXBlYXRlcg.tmp');
-
-// ini file to open
-$filepath = '/tmp/ZHN0YXJyZXBlYXRlcg.tmp';
-// Clean up the /tmp staging file on script exit so the
-// editor's potentially-secrets-bearing copy of /etc/<config>
-// doesn't persist between requests. @-suppression handles
-// the case where a sudo mv (e.g. fulledit_bmapikey) already
-// consumed the staging file before script end.
+// A3-3 — see edit_ircddbgateway.php for the full TOCTOU rationale.
+// tempnam() creates the staging file mode 600 owned by www-data
+// with an unguessable random suffix; cleanup is registered up
+// front so the file never persists past script exit.
+$filepath = tempnam('/tmp', 'pistar-edit-');
 register_shutdown_function(function() use ($filepath) { @unlink($filepath); });
+exec('sudo cp /etc/dstarrepeater ' . escapeshellarg($filepath));
+// Defensive re-assert; tempnam already 600 www-data and `sudo cp`
+// preserves it, but match the surrounding pattern as belt-and-braces.
+exec('sudo chown www-data:www-data ' . escapeshellarg($filepath));
+exec('sudo chmod 600 ' . escapeshellarg($filepath));
 
 // Mangle the input
 $file_content = "[dstarrepeater]\n".preg_replace('~\r\n?~', "\n", file_get_contents($filepath));
@@ -122,7 +121,8 @@ if($_POST) {
         // L-5: collapses cp + chmod + chown into one atomic install).
         // See edit_ircddbgateway.php for the full rationale.
         $etcContent  = preg_replace('/^\[dstarrepeater\]\r?\n/m', '', $content);
-        $etcStaging  = '/tmp/ZHN0YXJyZXBlYXRlcg_etc.tmp';
+        // A3-3: per-request random staging — see edit_ircddbgateway.php
+        $etcStaging  = tempnam('/tmp', 'pistar-edit-etc-');
         file_put_contents($etcStaging, $etcContent);
 
         exec('sudo mount -o remount,rw /');

@@ -56,18 +56,15 @@ require_once('../config/version.php');
 
 <?php
 // Do some file wrangling...
-exec('sudo cp /etc/starnetserver /tmp/c3Rhcm5ldHNlcnZlcg.tmp');
-exec('sudo chown www-data:www-data /tmp/c3Rhcm5ldHNlcnZlcg.tmp');
-exec('sudo chmod 600 /tmp/c3Rhcm5ldHNlcnZlcg.tmp');
-
-// ini file to open
-$filepath = '/tmp/c3Rhcm5ldHNlcnZlcg.tmp';
-// Clean up the /tmp staging file on script exit so the
-// editor's potentially-secrets-bearing copy of /etc/<config>
-// doesn't persist between requests. @-suppression handles
-// the case where a sudo mv (e.g. fulledit_bmapikey) already
-// consumed the staging file before script end.
+// A3-3 — see edit_ircddbgateway.php for the full TOCTOU rationale.
+// tempnam() creates the staging file mode 600 owned by www-data
+// with an unguessable random suffix; cleanup is registered up
+// front so the file never persists past script exit.
+$filepath = tempnam('/tmp', 'pistar-edit-');
 register_shutdown_function(function() use ($filepath) { @unlink($filepath); });
+exec('sudo cp /etc/starnetserver ' . escapeshellarg($filepath));
+exec('sudo chown www-data:www-data ' . escapeshellarg($filepath));
+exec('sudo chmod 600 ' . escapeshellarg($filepath));
 
 // Mangle the input
 $file_content = "[starnetserver]\n".file_get_contents($filepath);
@@ -119,7 +116,8 @@ if($_POST) {
         // L-5: collapses cp + chmod + chown into one atomic install).
         // See edit_ircddbgateway.php for the full rationale.
         $etcContent  = preg_replace('/^\[starnetserver\]\r?\n/m', '', $content);
-        $etcStaging  = '/tmp/c3Rhcm5ldHNlcnZlcg_etc.tmp';
+        // A3-3: per-request random staging — see edit_ircddbgateway.php
+        $etcStaging  = tempnam('/tmp', 'pistar-edit-etc-');
         file_put_contents($etcStaging, $etcContent);
 
         exec('sudo mount -o remount,rw /');
