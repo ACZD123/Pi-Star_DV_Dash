@@ -149,7 +149,17 @@ if (!empty($_POST['adminPassword'])) {
             // to 600. Owner stays www-data so nginx (running as
             // www-data) keeps reading for basic-auth checks; other
             // local users no longer see the bcrypt hash.
-            @chmod('/var/www/.htpasswd', 0600);
+            //
+            // Surface chmod failure into the error log. The realistic
+            // failure modes are (a) htpasswd spawn failed and the
+            // file is in some unexpected state, or (b) a future
+            // refactor moves this call outside the rootfs-rw window
+            // (it sits inside one today — see commit aa999d49).
+            // Either way, the file silently staying mode 644 would
+            // be worth knowing about.
+            if (@chmod('/var/www/.htpasswd', 0600) === false) {
+                error_log('Pi-Star change_password_required.php: chmod 0600 /var/www/.htpasswd failed (file may stay mode 644 until next save)');
+            }
             // chpasswd succeeded; treat as success even if htpasswd
             // failed (operator can retry — same behaviour as
             // configure.php). The browser will re-prompt for the new

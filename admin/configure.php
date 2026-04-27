@@ -457,8 +457,12 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
           // Tighten /var/www/.htpasswd from htpasswd's default 644
           // to 600. Owner stays www-data so nginx (also www-data)
           // keeps reading for basic-auth checks; other local users
-          // can no longer see the bcrypt hash.
-          @chmod('/var/www/.htpasswd', 0600);
+          // can no longer see the bcrypt hash. Surface failure to
+          // the error log — see change_password_required.php for
+          // the matching rationale.
+          if (@chmod('/var/www/.htpasswd', 0600) === false) {
+              error_log('Pi-Star configure.php: chmod 0600 /var/www/.htpasswd failed (file may stay mode 644 until next save)');
+          }
         }
       }
 
