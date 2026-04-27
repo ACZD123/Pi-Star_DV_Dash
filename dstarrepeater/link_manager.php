@@ -72,7 +72,7 @@ else {
     if ($module != $targetRef && $_POST["Link"] == "LINK") {    // Sanity check that we are not connecting to ourself
         echo "<b>D-Star Link Manager</b>\n";
         echo "<table>\n<tr><th>Command Output</th></tr>\n<tr><td>";
-        echo exec($linkCommand);
+        echo htmlspecialchars((string)exec($linkCommand), ENT_QUOTES, 'UTF-8');
         echo "</td></tr>\n</table>\n";
         }
     if ($module == $targetRef && $_POST["Link"] == "LINK") {    // Sanity Check Failed
@@ -84,7 +84,7 @@ else {
     if ($_POST["Link"] == "UNLINK") {                // Allow Unlink no matter what
         echo "<b>D-Star Link Manager</b>\n";
         echo "<table>\n<tr><th>Command Output</th></tr>\n<tr><td>";
-        echo exec($unlinkCommand);
+        echo htmlspecialchars((string)exec($unlinkCommand), ENT_QUOTES, 'UTF-8');
         echo "</td></tr>\n</table>\n";
         }
     }

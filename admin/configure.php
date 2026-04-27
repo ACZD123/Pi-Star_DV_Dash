@@ -331,7 +331,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
     <tr>
     <td><?php if (strlen(php_uname('n')) >= 16) { echo substr(php_uname('n'), 0, 14) . '..'; } else { echo php_uname('n'); } ?></td>
     <td><?php echo php_uname('r');?></td>
-    <td colspan="2"><?php echo exec('/usr/local/bin/platformDetect.sh');?></td>
+    <td colspan="2"><?php echo htmlspecialchars((string)exec('/usr/local/bin/platformDetect.sh'), ENT_QUOTES, 'UTF-8');?></td>
     <td><?php echo number_format($cpuLoad[0],2);?> / <?php echo number_format($cpuLoad[1],2);?> / <?php echo number_format($cpuLoad[2],2);?></td>
     <?php echo $cpuTempHTML; ?>
     </tr>
@@ -4134,7 +4134,7 @@ else:
     </tr>
     <tr>
     <td align="left"><a class="tooltip2" href="#">Hostname:<span><b>System Hostname</b>This is the system hostname, used for access to the dashboard etc.</span></a></td>
-    <td align="left" colspan="2"><input type="text" name="confHostame" size="13" maxlength="15" value="<?php echo exec('cat /etc/hostname'); ?>" />Do not add suffixes such as .local</td>
+    <td align="left" colspan="2"><input type="text" name="confHostame" size="13" maxlength="15" value="<?php echo htmlspecialchars((string)exec('cat /etc/hostname'), ENT_QUOTES, 'UTF-8'); ?>" />Do not add suffixes such as .local</td>
     </tr>
     <tr>
     <td align="left"><a class="tooltip2" href="#"><?php echo $lang['node_call'];?>:<span><b>Gateway Callsign</b>This is your licenced callsign for use on this gateway, do not append the "G"</span></a></td>
@@ -5411,7 +5411,7 @@ $p25Hosts = fopen("/usr/local/etc/P25Hosts.txt", "r");
       <tr>
         <td align="left"><a class="tooltip2" href="#"><?php echo $lang['mobilegps_port'];?>:<span><b>GPS Port</b>The port used by the Mobile GPS service.</span></a></td>
     <td align="left"><select name="mobilegps_port">
-        <option value="<?php echo exec('grep "Port=/dev/" /etc/mobilegps | awk -F "=" \'{print $2}\' | awk -F "/" \'{print $3}\''); ?>" selected="selected"><?php echo exec('grep "Port=/dev/" /etc/mobilegps | awk -F "=" \'{print $2}\''); ?></option>
+        <option value="<?php echo htmlspecialchars((string)exec('grep "Port=/dev/" /etc/mobilegps | awk -F "=" \'{print $2}\' | awk -F "/" \'{print $3}\''), ENT_QUOTES, 'UTF-8'); ?>" selected="selected"><?php echo htmlspecialchars((string)exec('grep "Port=/dev/" /etc/mobilegps | awk -F "=" \'{print $2}\''), ENT_QUOTES, 'UTF-8'); ?></option>
         <?php
           exec('ls /dev/ | egrep -h "ttyA|ttyUSB"', $mobileGPSPorts);
           foreach($mobileGPSPorts as $port) {
@@ -5422,7 +5422,7 @@ $p25Hosts = fopen("/usr/local/etc/P25Hosts.txt", "r");
       </tr>
       <tr>
         <td align="left"><a class="tooltip2" href="#"><?php echo $lang['mobilegps_speed'];?>:<span><b>GPS Port Speed</b>Port speed for the Mobile GPS port.</span></a></td>
-    <td align="left"><input type="text" name="mobilegps_speed" size="13" maxlength="6" value="<?php echo exec('grep "Speed" /etc/mobilegps | awk -F "=" \'{print $2}\''); ?>" /></td>
+    <td align="left"><input type="text" name="mobilegps_speed" size="13" maxlength="6" value="<?php echo htmlspecialchars((string)exec('grep "Speed" /etc/mobilegps | awk -F "=" \'{print $2}\''), ENT_QUOTES, 'UTF-8'); ?>" /></td>
       </tr>
     </table>
     <div><input type="button" value="<?php echo $lang['apply'];?>" onclick="submitform()" /><br /><br /></div>

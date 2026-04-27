@@ -75,13 +75,16 @@ else {
     if ($_POST["Link"] == "LINK") {
         echo "<b>Reflector Connector</b>\n";
         echo "<table>\n<tr><th><a class=tooltip href=\"#\">Command Output<span><b>Command Output</b></span></th></tr>\n<tr><td>";
-        echo exec($linkCommand);
+        // remotecontrold output is text from the daemon; escape on
+        // display defence-in-depth (the input fields above were
+        // already preg_match-whitelist-validated).
+        echo htmlspecialchars((string)exec($linkCommand), ENT_QUOTES, 'UTF-8');
         echo "</tr></td>\n</table>\n";
         }
     if ($_POST["Link"] == "UNLINK") {
         echo "<b>Reflector Connector</b>\n";
         echo "<table>\n<tr><th><a class=tooltip href=\"#\">Command Output<span><b>Command Output</b></span></th></tr>\n<tr><td>";
-        echo exec($unlinkCommand);
+        echo htmlspecialchars((string)exec($unlinkCommand), ENT_QUOTES, 'UTF-8');
         echo "</tr></td>\n</table>\n";
         }
     }

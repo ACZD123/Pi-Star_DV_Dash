@@ -73,7 +73,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/index.php") { // Stop this working outside o
           if (isset($remoteCommand)) {
         echo "<b>M17 Link Manager</b>\n";
         echo "<table>\n<tr><th>Command Output</th></tr>\n<tr><td>";
-        echo exec($remoteCommand);
+        echo htmlspecialchars((string)exec($remoteCommand), ENT_QUOTES, 'UTF-8');
         echo "</td></tr>\n</table>\n<br />\n";
         echo '<script type="text/javascript">setTimeout(function() { window.location=window.location;},2000);</script>';
           }

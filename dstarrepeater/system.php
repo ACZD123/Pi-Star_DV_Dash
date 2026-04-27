@@ -58,9 +58,9 @@ if ($cpuTempC >= 69) { $cpuTempHTML = "<td style=\"background: #f00\">".$cpuTemp
     <th><a class="tooltip" href="#"><?php echo $lang['cpu_temp'];?><span><b>CPU Temp</b></span></a></th>
   </tr>
   <tr>
-    <td><?php if (strlen(php_uname('n')) >= 16) { echo substr(php_uname('n'), 0, 14) . '..'; } else { echo php_uname('n'); } ?></td>
-    <td><?php echo php_uname('r');?></td>
-    <td colspan="2"><?php echo exec('/usr/local/bin/platformDetect.sh');?></td>
+    <td><?php $h = php_uname('n'); if (strlen($h) >= 16) { $h = substr($h, 0, 14) . '..'; } echo htmlspecialchars((string)$h, ENT_QUOTES, 'UTF-8'); ?></td>
+    <td><?php echo htmlspecialchars((string)php_uname('r'), ENT_QUOTES, 'UTF-8');?></td>
+    <td colspan="2"><?php echo htmlspecialchars((string)exec('/usr/local/bin/platformDetect.sh'), ENT_QUOTES, 'UTF-8');?></td>
     <td><?php echo number_format($cpuLoad[0],2);?> / <?php echo number_format($cpuLoad[1],2);?> / <?php echo number_format($cpuLoad[2],2);?></td>
     <?php echo $cpuTempHTML; ?>
   </tr>
