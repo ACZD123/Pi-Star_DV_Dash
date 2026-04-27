@@ -71,10 +71,14 @@ if(isset($_POST['data'])) {
         $fh = fopen($filepath, 'w');
         fwrite($fh, $_POST['data']);
         fclose($fh);
+        // Atomic install: content + mode + owner set in one syscall
+        // sequence. Same rationale as the bmapikey/dapnetapi B5 work
+        // and the parallel pistar-remote / pistar-css.ini migrations.
+        // /usr/local/etc/RSSI.dat is read by the MMDVMHost daemon
+        // (root) and is world-readable for the dashboard's editor
+        // round-trip; 644 root:root preserves both.
         exec('sudo mount -o remount,rw /');
-        exec('sudo cp /tmp/yAw432GHs5.tmp /usr/local/etc/RSSI.dat');
-        exec('sudo chmod 644 /usr/local/etc/RSSI.dat');
-        exec('sudo chown root:root /usr/local/etc/RSSI.dat');
+        exec('sudo install -m 644 -o root -g root /tmp/yAw432GHs5.tmp /usr/local/etc/RSSI.dat');
         exec('sudo mount -o remount,ro /');
 
         // Re-open the file and read it

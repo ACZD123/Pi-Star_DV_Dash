@@ -95,12 +95,15 @@ if (!file_exists('/etc/pistar-css.ini')) {
     fwrite($outFile, $fileContent);
     fclose($outFile);
 
-    // Put the file back where it should be
-    exec('sudo mount -o remount,rw /');                             // Make rootfs writable
-    exec('sudo cp /tmp/bW1kd4jg6b3N0DQo.tmp /etc/pistar-css.ini');  // Move the file back
-    exec('sudo chmod 644 /etc/pistar-css.ini');                     // Set the correct runtime permissions
-    exec('sudo chown root:root /etc/pistar-css.ini');               // Set the owner
-    exec('sudo mount -o remount,ro /');                             // Make rootfs read-only
+    // Atomic install: content + mode + owner set in one syscall
+    // sequence. Replaces the prior cp + chmod + chown trio so an
+    // interrupted RW window can't leave /etc/pistar-css.ini at the
+    // staging file's www-data:www-data 600. The dashboard's CSS
+    // renderer (/css/pistar-css.php) reads it via parse_ini_file
+    // without sudo, so 644 root:root preserves the read path.
+    exec('sudo mount -o remount,rw /');
+    exec('sudo install -m 644 -o root -g root /tmp/bW1kd4jg6b3N0DQo.tmp /etc/pistar-css.ini');
+    exec('sudo mount -o remount,ro /');
 }
 
 //Do some file wrangling...
@@ -191,12 +194,12 @@ if($_POST) {
         $success = fwrite($handle, $content);
         fclose($handle);
 
-        // Updates complete - copy the working file back to the proper location
-        exec('sudo mount -o remount,rw /');                             // Make rootfs writable
-        exec('sudo cp /tmp/bW1kd4jg6b3N0DQo.tmp /etc/pistar-css.ini');  // Move the file back
-        exec('sudo chmod 644 /etc/pistar-css.ini');                     // Set the correct runtime permissions
-        exec('sudo chown root:root /etc/pistar-css.ini');               // Set the owner
-        exec('sudo mount -o remount,ro /');                             // Make rootfs read-only
+        // Atomic install — see the matching block earlier in this
+        // file for the rationale. Single sudo call, content + mode
+        // + owner all set together; no transient state on disk.
+        exec('sudo mount -o remount,rw /');
+        exec('sudo install -m 644 -o root -g root /tmp/bW1kd4jg6b3N0DQo.tmp /etc/pistar-css.ini');
+        exec('sudo mount -o remount,ro /');
 
         return $success;
     }

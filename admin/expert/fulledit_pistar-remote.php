@@ -71,10 +71,15 @@ if(isset($_POST['data'])) {
         $fh = fopen($filepath, 'w');
         fwrite($fh, $_POST['data']);
         fclose($fh);
+        // Atomic install: content + mode + owner set in one syscall
+        // sequence. Collapses the prior cp + chmod + chown trio so an
+        // interrupted RW window can't leave /etc/pistar-remote at the
+        // staging file's www-data:www-data 600. /etc/pistar-remote is
+        // read by the pistar-remote.service daemon and by dashboard
+        // pages via parse_ini_file (no sudo); 644 root:root keeps both
+        // working — same target as the bmapikey/dapnetapi B5 migration.
         exec('sudo mount -o remount,rw /');
-        exec('sudo cp /tmp/fmehg65934eg.tmp /etc/pistar-remote');
-        exec('sudo chmod 644 /etc/pistar-remote');
-        exec('sudo chown root:root /etc/pistar-remote');
+        exec('sudo install -m 644 -o root -g root /tmp/fmehg65934eg.tmp /etc/pistar-remote');
         exec('sudo mount -o remount,ro /');
 
         // Reload the affected daemon
