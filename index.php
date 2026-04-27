@@ -33,6 +33,7 @@
  */
 
 require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
+require_once($_SERVER['DOCUMENT_ROOT'] . '/config/banner_warnings.inc');
 setSecurityHeaders();
 
 // CSRF protection — only the /admin/ variant of this file processes
@@ -52,6 +53,11 @@ if ($_SERVER["PHP_SELF"] == "/admin/index.php") {
     require_once($_SERVER['DOCUMENT_ROOT'] . '/config/csrf.php');
     csrf_verify();
 }
+
+// Layer 2 of the default-password protection — see config/banner_warnings.inc
+// for the threat model and gating logic. No-op on the public / URL.
+// MUST run BEFORE any output so header('Location: ...') works.
+pistar_warnings_enforce_redirect();
 
 require_once('config/version.php');
 require_once('config/ircddblocal.php');
@@ -116,47 +122,11 @@ $configPistarRelease = parse_ini_file($pistarReleaseConfig, true);
 </head>
 <body>
 <?php
-if ( ($_SERVER["PHP_SELF"] == "/admin/index.php") && version_compare($configPistarRelease['Pi-Star']['Version'], "4.1", "<") && ($configPistarRelease['Pi-Star']['Hardware'] == "RPi") ) {
+// Site-wide warnings (default-password, Pi-Star upgrade nudges, DMR
+// loop risk, BM API v1, etc.). Gates internally on /admin/* so the
+// public / URL renders nothing here.
+pistar_warnings_render();
 ?>
-<div>
-  <table align="center" width="760px" style="margin: 0px 0px 10px 0px; width: 100%;">
-    <tr>
-    <td align="center" valign="top" style="background-color: #ffff90; color: #906000;">Alert: You are running an outdated version of Pi-Star, please upgrade.<br />
-    New versions are available from the here: <a href="http://www.pistar.uk/downloads/" alt="Pi-Star Downloads">http://www.pistar.uk/downloads/</a>.</td>
-    </tr>
-  </table>
-</div>
-<?php }
-if ( ($_SERVER["PHP_SELF"] == "/admin/index.php") && version_compare($configPistarRelease['Pi-Star']['Version'], "4.1.0", ">=") && version_compare($configPistarRelease['Pi-Star']['Version'], "4.1.10", "<") ) {
-?>
-<div>
-  <table align="center" width="760px" style="margin: 0px 0px 10px 0px; width: 100%;">
-    <tr>
-    <td align="center" valign="top" style="background-color: #ffff90; color: #906000;">Alert: An upgrade to Pi-Star has been released, click here to upgrade now: <a href="/admin/expert/upgrade.php" alt="Upgrade Pi-Star">Upgrade Pi-Star</a>.</td>
-    </tr>
-  </table>
-</div>
-<?php }
-if ( ($_SERVER["PHP_SELF"] == "/admin/index.php") && version_compare($configPistarRelease['Pi-Star']['Version'], "4.2.0", ">=") && version_compare($configPistarRelease['Pi-Star']['Version'], "4.2.3", "<") ) {
-?>
-<div>
-  <table align="center" width="760px" style="margin: 0px 0px 10px 0px; width: 100%;">
-    <tr>
-    <td align="center" valign="top" style="background-color: #ffff90; color: #906000;">Alert: An upgrade to Pi-Star has been released, click here to upgrade now: <a href="/admin/expert/upgrade.php" alt="Upgrade Pi-Star">Upgrade Pi-Star</a>.</td>
-    </tr>
-  </table>
-</div>
-<?php }
-if ( ($_SERVER["PHP_SELF"] == "/admin/index.php") && version_compare($configPistarRelease['Pi-Star']['Version'], "4.3.0", ">=") && version_compare($configPistarRelease['Pi-Star']['Version'], "4.3.4", "<") ) {
-?>
-<div>
-  <table align="center" width="760px" style="margin: 0px 0px 10px 0px; width: 100%;">
-    <tr>
-    <td align="center" valign="top" style="background-color: #ffff90; color: #906000;">Alert: An upgrade to Pi-Star has been released, click here to upgrade now: <a href="/admin/expert/upgrade.php" alt="Upgrade Pi-Star">Upgrade Pi-Star</a>.</td>
-    </tr>
-  </table>
-</div>
-<?php } ?>
 <div class="container">
 <div class="header">
 <div style="font-size: 8px; text-align: left; padding-left: 8px; float: left;">Hostname: <?php echo exec('cat /etc/hostname'); ?></div><div style="font-size: 8px; text-align: right; padding-right: 8px;">Pi-Star:<?php echo $configPistarRelease['Pi-Star']['Version']?> / <?php echo $lang['dashboard'].": ".$version; ?></div>

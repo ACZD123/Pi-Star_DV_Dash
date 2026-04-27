@@ -47,6 +47,7 @@
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/config_writer.php');
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/csrf.php');
+require_once($_SERVER['DOCUMENT_ROOT'].'/config/banner_warnings.inc');
 setSecurityHeaders();
 
 // CSRF protection — must run BEFORE any output:
@@ -60,6 +61,10 @@ setSecurityHeaders();
 //     session token. On mismatch the helper emits 403 + exit()
 //     before any side effects (mount-rw, sed/install, etc.) run.
 csrf_verify();
+
+// Layer 2 of the default-password protection — see config/banner_warnings.inc.
+// MUST run BEFORE any output so header('Location: ...') works.
+pistar_warnings_enforce_redirect();
 
 // Get the CPU temp and colour the box accordingly...
 $cpuTempCRaw = exec('cat /sys/class/thermal/thermal_zone0/temp');
@@ -288,72 +293,11 @@ $MYCALL=strtoupper($configs['gatewayCallsign']);
 </head>
 <body onload="checkFrequency(); return false;">
 <?php
-if ( ($configPistarRelease['Pi-Star']['Version'] < 4.1) && ($configPistarRelease['Pi-Star']['Hardware'] == "RPi") ) {
+// Site-wide warning banners (default-password, Pi-Star upgrade
+// nudges, DMR loop risk, BM API v1, etc.). Conditional logic lives
+// in config/banner_warnings.inc — see that file for the full set.
+pistar_warnings_render();
 ?>
-<div>
-  <table align="center" width="760px" style="margin: 0px 0px 10px 0px; width: 100%;">
-    <tr>
-    <td align="center" valign="top" style="background-color: #ffff90; color: #906000;">Alert: You are running an outdated version of Pi-Star, please upgrade.<br />
-    New versions are available from the here: <a href="http://www.pistar.uk/downloads/" alt="Pi-Star Downloads">http://www.pistar.uk/downloads/</a>.</td>
-    </tr>
-  </table>
-</div>
-<?php }
-if ( (file_exists('/etc/dstar-radio.mmdvmhost') && $configmmdvm['DMR']['Enable'] == 1 && $configmmdvm['DMR']['SelfOnly'] == 0 && strlen($configmmdvm['General']['Id']) >= 7 ) && (!isset($configmmdvm['DMR']['WhiteList'])) ) {
-?>
-<div>
-  <table align="center" width="760px" style="margin: 0px 0px 10px 0px; width: 100%;">
-    <tr>
-    <td align="center" valign="top" style="background-color: #ffff90; color: #906000;">Alert: You are running a hotspot in public mode without an access list for DMR, this setup *could* participate in network loops!</td>
-    </tr>
-  </table>
-</div>
-<?php }
-if ( version_compare($configPistarRelease['Pi-Star']['Version'], "4.1.0", ">=") && version_compare($configPistarRelease['Pi-Star']['Version'], "4.1.10", "<") ) {
-?>
-<div>
-  <table align="center" width="760px" style="margin: 0px 0px 10px 0px; width: 100%;">
-    <tr>
-    <td align="center" valign="top" style="background-color: #ffff90; color: #906000;">Alert: An upgrade to Pi-Star has been released, click here to upgrade now: <a href="/admin/expert/upgrade.php" alt="Upgrade Pi-Star">Upgrade Pi-Star</a>.</td>
-    </tr>
-  </table>
-</div>
-<?php }
-if ( version_compare($configPistarRelease['Pi-Star']['Version'], "4.2.0", ">=") && version_compare($configPistarRelease['Pi-Star']['Version'], "4.2.3", "<") ) {
-?>
-<div>
-  <table align="center" width="760px" style="margin: 0px 0px 10px 0px; width: 100%;">
-    <tr>
-    <td align="center" valign="top" style="background-color: #ffff90; color: #906000;">Alert: An upgrade to Pi-Star has been released, click here to upgrade now: <a href="/admin/expert/upgrade.php" alt="Upgrade Pi-Star">Upgrade Pi-Star</a>.</td>
-    </tr>
-  </table>
-</div>
-<?php }
-if ( version_compare($configPistarRelease['Pi-Star']['Version'], "4.3.0", ">=") && version_compare($configPistarRelease['Pi-Star']['Version'], "4.3.4", "<") ) {
-?>
-<div>
-  <table align="center" width="760px" style="margin: 0px 0px 10px 0px; width: 100%;">
-    <tr>
-    <td align="center" valign="top" style="background-color: #ffff90; color: #906000;">Alert: An upgrade to Pi-Star has been released, click here to upgrade now: <a href="/admin/expert/upgrade.php" alt="Upgrade Pi-Star">Upgrade Pi-Star</a>.</td>
-    </tr>
-  </table>
-</div>
-<?php }
-$bmAPIkeyFile = '/etc/bmapi.key';
-if (file_exists($bmAPIkeyFile) && fopen($bmAPIkeyFile,'r')) {
-  $configBMapi = parse_ini_file($bmAPIkeyFile, true);
-  $bmAPIkey = $configBMapi['key']['apikey'];
-  // Check the BM API Key
-  if ( strlen($bmAPIkey) <= 200 ) {
-?>
-<div>
-  <table align="center" width="760px" style="margin: 0px 0px 10px 0px; width: 100%;">
-    <tr>
-    <td align="center" valign="top" style="background-color: #ff9090; color: #f01010;">Alert: You have a BM API v1 Key, click here for the announcement: <a href="https://news.brandmeister.network/introducing-user-api-keys/" alt="BM API Keys">BM API Keys - Announcement</a>.</td>
-    </tr>
-  </table>
-</div>
-<?php } } ?>
 <div class="container">
 <div class="header">
 <div style="font-size: 8px; text-align: right; padding-right: 8px;">Pi-Star:<?php echo $configPistarRelease['Pi-Star']['Version']?> / <?php echo $lang['dashboard'].": ".$version; ?></div>

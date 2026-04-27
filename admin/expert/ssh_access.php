@@ -11,7 +11,12 @@
  * No file edits, no privileged calls — pure UI wrapper.
  */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
+require_once($_SERVER['DOCUMENT_ROOT'].'/config/banner_warnings.inc');
 setSecurityHeadersAllowDifferentPorts();
+
+// Layer 2 of the default-password protection — see config/banner_warnings.inc.
+// MUST run BEFORE any output so header('Location: ...') works.
+pistar_warnings_enforce_redirect();
 
 // Load the language support
 require_once('../config/language.php');

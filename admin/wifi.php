@@ -30,6 +30,7 @@
  */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/csrf.php');
+require_once($_SERVER['DOCUMENT_ROOT'].'/config/banner_warnings.inc');
 setSecurityHeaders();
 
 // CSRF protection — see config/csrf.php for the full rationale.
@@ -37,6 +38,10 @@ setSecurityHeaders();
 // Set-Cookie ships) and rejects forged POSTs (Reset WiFi adapter,
 // SaveWPAPSKSettings) cleanly with 403 before any side effect.
 csrf_verify();
+
+// Layer 2 of the default-password protection — see config/banner_warnings.inc.
+// MUST run BEFORE any output so header('Location: ...') works.
+pistar_warnings_enforce_redirect();
 
 include('wifi/phpincs.php');
 $output = $return = 0;

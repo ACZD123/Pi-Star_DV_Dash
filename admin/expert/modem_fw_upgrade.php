@@ -13,6 +13,7 @@
  */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/csrf.php');
+require_once($_SERVER['DOCUMENT_ROOT'].'/config/banner_warnings.inc');
 setSecurityHeaders();
 
 // CSRF protection — see config/csrf.php for the full rationale.
@@ -20,6 +21,10 @@ setSecurityHeaders();
 // Set-Cookie ships) and rejects forged POSTs cleanly with 403
 // before any state change (sed-i, fopen+fwrite, sudo cp, etc.).
 csrf_verify();
+
+// Layer 2 of the default-password protection — see config/banner_warnings.inc.
+// MUST run BEFORE any output so header('Location: ...') works.
+pistar_warnings_enforce_redirect();
 
 // Load the language support
 require_once('../config/language.php');

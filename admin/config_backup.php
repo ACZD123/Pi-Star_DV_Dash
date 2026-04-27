@@ -41,6 +41,7 @@
  */
 
 require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
+require_once($_SERVER['DOCUMENT_ROOT'] . '/config/banner_warnings.inc');
 setSecurityHeaders();
 
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/csrf.php');
@@ -113,6 +114,10 @@ function backup_files()
 // cross-site click); the underlying bugs in the restore handler
 // remain — they are tracked separately as the C1/C2 work-on-hold.
 csrf_verify();
+
+// Layer 2 of the default-password protection — see config/banner_warnings.inc.
+// MUST run BEFORE any output so header('Location: ...') works.
+pistar_warnings_enforce_redirect();
 
 // Load the language support
 require_once('config/language.php');

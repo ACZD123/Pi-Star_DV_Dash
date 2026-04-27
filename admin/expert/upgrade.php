@@ -9,6 +9,7 @@
  */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/csrf.php');
+require_once($_SERVER['DOCUMENT_ROOT'].'/config/banner_warnings.inc');
 setSecurityHeaders();
 
 // CSRF protection — see config/csrf.php for the full rationale.
@@ -17,6 +18,10 @@ setSecurityHeaders();
 // run before that, so a hostile cross-site POST can never start
 // a long-running privileged upgrade on the device.
 csrf_verify();
+
+// Layer 2 of the default-password protection — see config/banner_warnings.inc.
+// MUST run BEFORE any output so header('Location: ...') works.
+pistar_warnings_enforce_redirect();
 
 // Load the language support
 require_once('../config/language.php');

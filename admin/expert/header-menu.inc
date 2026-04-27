@@ -1,3 +1,13 @@
+<?php
+// Site-wide warning banners (default-password, Pi-Star upgrade nudges,
+// DMR loop risk, BM API v1, etc.). Conditional logic lives in
+// config/banner_warnings.inc. The include is loaded by the calling
+// expert/*.php; this header just calls the render. Must come BEFORE
+// the .header div so banners stack above the page header.
+if (function_exists('pistar_warnings_render')) {
+    pistar_warnings_render();
+}
+?>
 <div class="header">
   <div style="font-size: 8px; text-align: right; padding-right: 8px;">Pi-Star:<?php echo $configPistarRelease['Pi-Star']['Version']?> / Dashboard:<?php echo $version; ?></div>
   <h1>Pi-Star Digital Voice - Expert Editors</h1>

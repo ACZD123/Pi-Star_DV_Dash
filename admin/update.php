@@ -14,6 +14,7 @@
  */
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 require_once($_SERVER['DOCUMENT_ROOT'].'/config/csrf.php');
+require_once($_SERVER['DOCUMENT_ROOT'].'/config/banner_warnings.inc');
 setSecurityHeaders();
 
 // CSRF protection — see config/csrf.php for the full rationale.
@@ -23,6 +24,10 @@ setSecurityHeaders();
 // long-running privileged update on the device. The helper emits
 // 403 + exit() on mismatch, well before the system() call.
 csrf_verify();
+
+// Layer 2 of the default-password protection — see config/banner_warnings.inc.
+// MUST run BEFORE any output so header('Location: ...') works.
+pistar_warnings_enforce_redirect();
 
 // Load the language support
 require_once('config/language.php');
