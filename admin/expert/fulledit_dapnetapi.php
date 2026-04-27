@@ -109,12 +109,15 @@ if($_POST) {
         $success = fwrite($handle, $content);
         fclose($handle);
 
-        // Updates complete - copy the working file back to the proper location
-        exec('sudo mount -o remount,rw /');                         // Make rootfs writable
-        exec('sudo cp /tmp/jsADGHwf9sj294.tmp /etc/dapnetapi.key'); // Move the file back
-        exec('sudo chmod 644 /etc/dapnetapi.key');                  // Set the correct runtime permissions
-        exec('sudo chown root:root /etc/dapnetapi.key');            // Set the owner
-        exec('sudo mount -o remount,ro /');                         // Make rootfs read-only
+        // Atomic install: mode + owner set in one syscall sequence.
+        // /etc/dapnetapi.key holds DAPNET credentials — mode 600 keeps
+        // them readable only by www-data. Owner left as www-data
+        // because the dapnetgateway daemon reads via the dashboard
+        // (and dashboard reads it directly without sudo elsewhere);
+        // see fulledit_bmapikey.php for the same rationale.
+        exec('sudo mount -o remount,rw /');
+        exec('sudo install -m 600 -o www-data -g www-data /tmp/jsADGHwf9sj294.tmp /etc/dapnetapi.key');
+        exec('sudo mount -o remount,ro /');
 
         return $success;
     }

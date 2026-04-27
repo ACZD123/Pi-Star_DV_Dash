@@ -109,12 +109,17 @@ if($_POST) {
         $success = fwrite($handle, $content);
         fclose($handle);
 
-        // Updates complete - copy the working file back to the proper location
-        exec('sudo mount -o remount,rw /');                // Make rootfs writable
-        exec('sudo mv /tmp/d39fk36sg55433gd.tmp /etc/bmapi.key');    // Move the file back
-        exec('sudo chmod 644 /etc/bmapi.key');                // Set the correct runtime permissions
-        exec('sudo chown root:root /etc/bmapi.key');            // Set the owner
-        exec('sudo mount -o remount,ro /');                // Make rootfs read-only
+        // Atomic install: mode + owner set in one syscall sequence.
+        // /etc/bmapi.key holds the BrandMeister API token — mode 600
+        // keeps it readable only by www-data (the dashboard user).
+        // Owner left as www-data because banner_warnings.inc / bm_links.php /
+        // bm_manager.php read the file directly via parse_ini_file()
+        // without sudo — switching to root:root here would silently
+        // break those reads. (Tightening to root:root is a follow-up
+        // once the read sites move to a sudo-cat helper.)
+        exec('sudo mount -o remount,rw /');
+        exec('sudo install -m 600 -o www-data -g www-data /tmp/d39fk36sg55433gd.tmp /etc/bmapi.key');
+        exec('sudo mount -o remount,ro /');
 
         return $success;
     }
