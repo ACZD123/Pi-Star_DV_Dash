@@ -454,6 +454,11 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
           } else {
             error_log("Pi-Star configure.php: failed to spawn htpasswd; basic-auth password not changed");
           }
+          // Tighten /var/www/.htpasswd from htpasswd's default 644
+          // to 600. Owner stays www-data so nginx (also www-data)
+          // keeps reading for basic-auth checks; other local users
+          // can no longer see the bcrypt hash.
+          @chmod('/var/www/.htpasswd', 0600);
         }
       }
 

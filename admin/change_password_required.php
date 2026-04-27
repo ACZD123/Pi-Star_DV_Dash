@@ -145,6 +145,11 @@ if (!empty($_POST['adminPassword'])) {
             } else {
                 error_log('Pi-Star change_password_required.php: failed to spawn htpasswd');
             }
+            // Tighten /var/www/.htpasswd from htpasswd's default 644
+            // to 600. Owner stays www-data so nginx (running as
+            // www-data) keeps reading for basic-auth checks; other
+            // local users no longer see the bcrypt hash.
+            @chmod('/var/www/.htpasswd', 0600);
             // chpasswd succeeded; treat as success even if htpasswd
             // failed (operator can retry — same behaviour as
             // configure.php). The browser will re-prompt for the new
