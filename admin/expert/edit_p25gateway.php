@@ -67,12 +67,11 @@ require_once('../config/version.php');
 
 <?php
 // Do some file wrangling...
-exec('sudo cp /etc/p25gateway /tmp/aFE45dgs4tFS.tmp');
-exec('sudo chown www-data:www-data /tmp/aFE45dgs4tFS.tmp');
-exec('sudo chmod 600 /tmp/aFE45dgs4tFS.tmp');
-
-// ini file to open
-$filepath = '/tmp/aFE45dgs4tFS.tmp';
+// A3-3 — see edit_ircddbgateway.php for the full TOCTOU rationale.
+$filepath = tempnam('/tmp', 'pistar-edit-');
+exec('sudo cp /etc/p25gateway ' . escapeshellarg($filepath));
+exec('sudo chown www-data:www-data ' . escapeshellarg($filepath));
+exec('sudo chmod 600 ' . escapeshellarg($filepath));
 // Clean up the /tmp staging file on script exit so the
 // editor's potentially-secrets-bearing copy of /etc/<config>
 // doesn't persist between requests. @-suppression handles
@@ -117,7 +116,7 @@ if($_POST) {
 
         // Updates complete - copy the working file back to the proper location
         exec('sudo mount -o remount,rw /');                // Make rootfs writable
-        exec('sudo cp /tmp/aFE45dgs4tFS.tmp /etc/p25gateway');    // Move the file back
+        exec('sudo cp ' . escapeshellarg($filepath) . ' /etc/p25gateway');    // Move the file back
         exec('sudo chmod 644 /etc/p25gateway');                // Set the correct runtime permissions
         exec('sudo chown root:root /etc/p25gateway');            // Set the owner
         exec('sudo mount -o remount,ro /');                // Make rootfs read-only

@@ -82,9 +82,16 @@ require_once('../config/version.php');
   <div class="contentwide">
 
 <?php
+// A3-3 — see edit_ircddbgateway.php for the full TOCTOU rationale.
+// tempnam() up front so both the factory-init branch (when
+// /etc/pistar-css.ini doesn't exist yet) and the normal-load
+// branch use the same per-request random staging path.
+$filepath = tempnam('/tmp', 'pistar-edit-');
+register_shutdown_function(function() use ($filepath) { @unlink($filepath); });
+
 if (!file_exists('/etc/pistar-css.ini')) {
     //The source file does not exist, lets create it....
-    $outFile = fopen("/tmp/bW1kd4jg6b3N0DQo.tmp", "w") or die("Unable to open file!");
+    $outFile = fopen($filepath, "w") or die("Unable to open file!");
     $fileContent = "[Background]\nPage=edf0f5\nContent=ffffff\nBanners=dd4b39\n\n";
     $fileContent .= "[Text]\nBanners=ffffff\nBannersDrop=303030\n\n";
     $fileContent .= "[Tables]\nHeadDrop=8b0000\nBgEven=f7f7f7\nBgOdd=d0d0d0\n\n";
@@ -102,23 +109,15 @@ if (!file_exists('/etc/pistar-css.ini')) {
     // renderer (/css/pistar-css.php) reads it via parse_ini_file
     // without sudo, so 644 root:root preserves the read path.
     exec('sudo mount -o remount,rw /');
-    exec('sudo install -m 644 -o root -g root /tmp/bW1kd4jg6b3N0DQo.tmp /etc/pistar-css.ini');
+    exec('sudo install -m 644 -o root -g root '
+         . escapeshellarg($filepath) . ' /etc/pistar-css.ini');
     exec('sudo mount -o remount,ro /');
 }
 
 //Do some file wrangling...
-exec('sudo cp /etc/pistar-css.ini /tmp/bW1kd4jg6b3N0DQo.tmp');
-exec('sudo chown www-data:www-data /tmp/bW1kd4jg6b3N0DQo.tmp');
-exec('sudo chmod 600 /tmp/bW1kd4jg6b3N0DQo.tmp');
-
-//ini file to open
-$filepath = '/tmp/bW1kd4jg6b3N0DQo.tmp';
-// Clean up the /tmp staging file on script exit so the
-// editor's potentially-secrets-bearing copy of /etc/<config>
-// doesn't persist between requests. @-suppression handles
-// the case where a sudo mv (e.g. fulledit_bmapikey) already
-// consumed the staging file before script end.
-register_shutdown_function(function() use ($filepath) { @unlink($filepath); });
+exec('sudo cp /etc/pistar-css.ini ' . escapeshellarg($filepath));
+exec('sudo chown www-data:www-data ' . escapeshellarg($filepath));
+exec('sudo chmod 600 ' . escapeshellarg($filepath));
 
 //after the form submit
 if($_POST) {
@@ -197,8 +196,11 @@ if($_POST) {
         // Atomic install — see the matching block earlier in this
         // file for the rationale. Single sudo call, content + mode
         // + owner all set together; no transient state on disk.
+        // $filepath here is the function parameter, which is the
+        // same per-request tempnam path created at file-top (A3-3).
         exec('sudo mount -o remount,rw /');
-        exec('sudo install -m 644 -o root -g root /tmp/bW1kd4jg6b3N0DQo.tmp /etc/pistar-css.ini');
+        exec('sudo install -m 644 -o root -g root '
+             . escapeshellarg($filepath) . ' /etc/pistar-css.ini');
         exec('sudo mount -o remount,ro /');
 
         return $success;

@@ -67,12 +67,11 @@ require_once('../config/version.php');
 
 <?php
 // Do some file wrangling...
-exec('sudo cp /etc/nxdngateway /tmp/aFEds45dgs4tFS.tmp');
-exec('sudo chown www-data:www-data /tmp/aFEds45dgs4tFS.tmp');
-exec('sudo chmod 600 /tmp/aFEds45dgs4tFS.tmp');
-
-// ini file to open
-$filepath = '/tmp/aFEds45dgs4tFS.tmp';
+// A3-3 — see edit_ircddbgateway.php for the full TOCTOU rationale.
+$filepath = tempnam('/tmp', 'pistar-edit-');
+exec('sudo cp /etc/nxdngateway ' . escapeshellarg($filepath));
+exec('sudo chown www-data:www-data ' . escapeshellarg($filepath));
+exec('sudo chmod 600 ' . escapeshellarg($filepath));
 // Clean up the /tmp staging file on script exit so the
 // editor's potentially-secrets-bearing copy of /etc/<config>
 // doesn't persist between requests. @-suppression handles
@@ -118,7 +117,7 @@ if($_POST) {
 
         // Updates complete - copy the working file back to the proper location
         exec('sudo mount -o remount,rw /');                       // Make rootfs writable
-        exec('sudo cp /tmp/aFEds45dgs4tFS.tmp /etc/nxdngateway'); // Move the file back
+        exec('sudo cp ' . escapeshellarg($filepath) . ' /etc/nxdngateway'); // Move the file back
         exec('sudo chmod 644 /etc/nxdngateway');                  // Set the correct runtime permissions
         exec('sudo chown root:root /etc/nxdngateway');            // Set the owner
         exec('sudo mount -o remount,ro /');                       // Make rootfs read-only

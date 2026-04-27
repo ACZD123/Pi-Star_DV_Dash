@@ -67,12 +67,11 @@ require_once('../config/version.php');
 
 <?php
 //Do some file wrangling...
-exec('sudo cp /etc/dmrgateway /tmp/fmehg65694eg.tmp');
-exec('sudo chown www-data:www-data /tmp/fmehg65694eg.tmp');
-exec('sudo chmod 600 /tmp/fmehg65694eg.tmp');
-
-//ini file to open
-$filepath = '/tmp/fmehg65694eg.tmp';
+// A3-3 — see edit_ircddbgateway.php for the full TOCTOU rationale.
+$filepath = tempnam('/tmp', 'pistar-edit-');
+exec('sudo cp /etc/dmrgateway ' . escapeshellarg($filepath));
+exec('sudo chown www-data:www-data ' . escapeshellarg($filepath));
+exec('sudo chmod 600 ' . escapeshellarg($filepath));
 // Clean up the /tmp staging file on script exit so the
 // editor's potentially-secrets-bearing copy of /etc/<config>
 // doesn't persist between requests. @-suppression handles
@@ -125,7 +124,7 @@ if($_POST) {
 
         // Updates complete - copy the working file back to the proper location
         exec('sudo mount -o remount,rw /');                                // Make rootfs writable
-        exec('sudo cp /tmp/fmehg65694eg.tmp /etc/dmrgateway');      // Move the file back
+        exec('sudo cp ' . escapeshellarg($filepath) . ' /etc/dmrgateway');      // Move the file back
         exec('sudo chmod 644 /etc/dmrgateway');                            // Set the correct runtime permissions
         exec('sudo chown root:root /etc/dmrgateway');                    // Set the owner
         exec('sudo mount -o remount,ro /');                                // Make rootfs read-only

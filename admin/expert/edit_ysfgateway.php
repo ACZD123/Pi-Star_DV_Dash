@@ -67,12 +67,11 @@ require_once('../config/version.php');
 
 <?php
 // Do some file wrangling...
-exec('sudo cp /etc/ysfgateway /tmp/eXNmZ2F0ZXdheQ.tmp');
-exec('sudo chown www-data:www-data /tmp/eXNmZ2F0ZXdheQ.tmp');
-exec('sudo chmod 600 /tmp/eXNmZ2F0ZXdheQ.tmp');
-
-// ini file to open
-$filepath = '/tmp/eXNmZ2F0ZXdheQ.tmp';
+// A3-3 — see edit_ircddbgateway.php for the full TOCTOU rationale.
+$filepath = tempnam('/tmp', 'pistar-edit-');
+exec('sudo cp /etc/ysfgateway ' . escapeshellarg($filepath));
+exec('sudo chown www-data:www-data ' . escapeshellarg($filepath));
+exec('sudo chmod 600 ' . escapeshellarg($filepath));
 // Clean up the /tmp staging file on script exit so the
 // editor's potentially-secrets-bearing copy of /etc/<config>
 // doesn't persist between requests. @-suppression handles
@@ -118,7 +117,7 @@ if($_POST) {
 
         // Updates complete - copy the working file back to the proper location
         exec('sudo mount -o remount,rw /');                // Make rootfs writable
-        exec('sudo cp /tmp/eXNmZ2F0ZXdheQ.tmp /etc/ysfgateway');    // Move the file back
+        exec('sudo cp ' . escapeshellarg($filepath) . ' /etc/ysfgateway');    // Move the file back
         exec('sudo chmod 644 /etc/ysfgateway');                // Set the correct runtime permissions
         exec('sudo chown root:root /etc/ysfgateway');            // Set the owner
         exec('sudo mount -o remount,ro /');                // Make rootfs read-only

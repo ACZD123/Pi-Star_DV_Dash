@@ -67,12 +67,13 @@ require_once('../config/version.php');
 
 <?php
 //Do some file wrangling...
-exec('sudo cp /etc/mmdvmhost /tmp/bW1kdm1ob3N0DQo.tmp');
-exec('sudo chown www-data:www-data /tmp/bW1kdm1ob3N0DQo.tmp');
-exec('sudo chmod 600 /tmp/bW1kdm1ob3N0DQo.tmp');
-
-//ini file to open
-$filepath = '/tmp/bW1kdm1ob3N0DQo.tmp';
+// A3-3 — see edit_ircddbgateway.php for the full TOCTOU rationale.
+// tempnam() creates the staging file mode 600 owned by www-data
+// with an unguessable random suffix.
+$filepath = tempnam('/tmp', 'pistar-edit-');
+exec('sudo cp /etc/mmdvmhost ' . escapeshellarg($filepath));
+exec('sudo chown www-data:www-data ' . escapeshellarg($filepath));
+exec('sudo chmod 600 ' . escapeshellarg($filepath));
 // Clean up the /tmp staging file on script exit so the
 // editor's potentially-secrets-bearing copy of /etc/<config>
 // doesn't persist between requests. @-suppression handles
@@ -133,7 +134,7 @@ if($_POST) {
 
         // Updates complete - copy the working file back to the proper location
         exec('sudo mount -o remount,rw /');                // Make rootfs writable
-        exec('sudo cp /tmp/bW1kdm1ob3N0DQo.tmp /etc/mmdvmhost');    // Move the file back
+        exec('sudo cp ' . escapeshellarg($filepath) . ' /etc/mmdvmhost');    // Move the file back
         exec('sudo chmod 644 /etc/mmdvmhost');                // Set the correct runtime permissions
         exec('sudo chown root:root /etc/mmdvmhost');            // Set the owner
         exec('sudo mount -o remount,ro /');                // Make rootfs read-only
