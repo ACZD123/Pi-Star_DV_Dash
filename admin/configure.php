@@ -1182,8 +1182,32 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
         config_writer_stage_flat('/etc/aprsgateway', 'Password', aprspass($newCallsignUpper));
         config_writer_stage_flat('/etc/ircddbgateway', 'aprsPort', '8673');
         unset($configs['aprsPassword']);
-        $rollircDDBGatewayAprsPass = 'sudo sed -i "/aprsPassword/d" /etc/ircddbgateway';
-        system($rollircDDBGatewayAprsPass);
+        // L-7: drop the prior `sudo sed -i "/aprsPassword/d"
+        // /etc/ircddbgateway` in favour of a PHP-side rewrite +
+        // atomic install. /etc/ircddbgateway is mode 644 (no sudo
+        // for read); the regex anchors at start-of-line so an
+        // attacker-controlled value containing the literal
+        // "aprsPassword=" inside another line cannot be touched.
+        // We're already inside the save handler's mount-rw window
+        // (opened ~line 384), so no remount calls here. Runs
+        // before config_writer_commit() at ~line 3752 — that read
+        // sees our post-delete state and preserves the deletion
+        // (commit only edits lines that match its staged keys).
+        $irccContent = @file_get_contents('/etc/ircddbgateway');
+        if ($irccContent !== false) {
+            $irccContent = preg_replace(
+                '/^aprsPassword=[^\r\n]*\r?\n/m',
+                '',
+                $irccContent
+            );
+            $stage = '/tmp/pistar-cfg-ircddb-aprs.tmp';
+            file_put_contents($stage, $irccContent);
+            system('sudo install -m 644 -o root -g root '
+                 . escapeshellarg($stage) . ' /etc/ircddbgateway');
+            @unlink($stage);
+        } else {
+            error_log('Pi-Star configure.php: /etc/ircddbgateway unreadable; aprsPassword delete skipped');
+        }
         if (empty($_POST['APRSGatewayEnable']) != TRUE) {
             if ($_POST['APRSGatewayEnable'] == 'ON')  { config_writer_stage_flat('/etc/aprsgateway', 'Enabled', '1'); }
             if ($_POST['APRSGatewayEnable'] == 'OFF') { config_writer_stage_flat('/etc/aprsgateway', 'Enabled', '0'); }
@@ -2847,10 +2871,33 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
         $configmmdvm['FM']['ModeHang'] = "20";
     }
 
-    // Stop ircDDBGateway from trying to lookup rr.openquad.net (the hard coded default) all the time
+    // Stop ircDDBGateway from trying to lookup rr.openquad.net (the hard coded default) all the time.
+    //
+    // L-7: drop the prior `sudo sed -i '/^ircddbEnabled=/a
+    // ircddbEnabled2=0'` in favour of a PHP-side rewrite + atomic
+    // install. preg_replace with the limit=1 argument inserts the
+    // new line after the FIRST `ircddbEnabled=...` match — same
+    // semantics as `sed /a` against an anchored pattern. Already
+    // inside the save handler's mount-rw window (opened ~line 384);
+    // runs before config_writer_commit() at ~line 3752 which
+    // preserves arbitrary lines it doesn't have a staged key for.
     if ( (!isset($configs['ircddbHostname2'])) && (!isset($configs['ircddbEnabled2'])) ) {
-        $fix2ndIRCHost = "sudo sed -i '/^ircddbEnabled=/a ircddbEnabled2=0' /etc/ircddbgateway";
-        system($fix2ndIRCHost);
+        $irccContent = @file_get_contents('/etc/ircddbgateway');
+        if ($irccContent !== false) {
+            $irccContent = preg_replace(
+                '/^(ircddbEnabled=[^\r\n]*\r?\n)/m',
+                '$1ircddbEnabled2=0' . "\n",
+                $irccContent,
+                1
+            );
+            $stage = '/tmp/pistar-cfg-ircddb-en2.tmp';
+            file_put_contents($stage, $irccContent);
+            system('sudo install -m 644 -o root -g root '
+                 . escapeshellarg($stage) . ' /etc/ircddbgateway');
+            @unlink($stage);
+        } else {
+            error_log('Pi-Star configure.php: /etc/ircddbgateway unreadable; ircddbEnabled2 insert skipped');
+        }
     }
 
     // Add missing options to DMR2YSF
