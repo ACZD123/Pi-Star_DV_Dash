@@ -391,8 +391,17 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
       $hasIllegalChar = preg_match('/[\x00\r\n]/', $rawPassword);
       $tooLong        = strlen($rawPassword) > 256; // sane cap; SHA512 ignores beyond ~72 bytes anyway
 
-      if ($rawPassword === '' || $hasIllegalChar || $tooLong) {
-        error_log("Pi-Star configure.php: adminPassword rejected (empty, contains NUL/CR/LF, or > 256 bytes)");
+      // Refuse to (re)set the factory default. Operators arriving via
+      // /admin/change_password_required.php already see this rejection;
+      // mirroring it here closes the obvious "set it, then set it back"
+      // footgun a Layer-1 (banner-only, local) operator could otherwise
+      // hit. hash_equals for constant-time compare — the literal isn't
+      // a secret (it's the publicly-documented default) but it's the
+      // right idiom.
+      $isStillDefault = hash_equals('raspberry', $rawPassword);
+
+      if ($rawPassword === '' || $hasIllegalChar || $tooLong || $isStillDefault) {
+        error_log("Pi-Star configure.php: adminPassword rejected (empty, contains NUL/CR/LF, > 256 bytes, or matches the factory default)");
       } else {
         $descriptors = [
           0 => ['pipe', 'r'], // child stdin  (we write the password)
