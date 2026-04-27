@@ -229,47 +229,30 @@ if(isset($_POST['data'])) {
                 error_log('Pi-Star fulledit_cron.php: rejected save with '
                         . count($cronBlockers) . ' blocked line(s)');
         } else {
-                // File Wrangling
-                exec('sudo cp /etc/crontab /tmp/a8h4d8n3c83h4.tmp');
-                exec('sudo chown www-data:www-data /tmp/a8h4d8n3c83h4.tmp');
-                exec('sudo chmod 600 /tmp/a8h4d8n3c83h4.tmp');
-
-                // Open the file and write the data
-                $filepath = '/tmp/a8h4d8n3c83h4.tmp';
-                // Clean up the /tmp staging file on script exit so the
-                // editor's potentially-secrets-bearing copy of /etc/<config>
-                // doesn't persist between requests. @-suppression handles
-                // the case where a sudo mv (e.g. fulledit_bmapikey) already
-                // consumed the staging file before script end.
+                // A3-3 — see edit_ircddbgateway.php for the full TOCTOU
+                // rationale. Per-request random staging path defeats
+                // the predictable-name pre-create / symlink class.
+                $filepath = tempnam('/tmp', 'pistar-edit-');
                 register_shutdown_function(function() use ($filepath) { @unlink($filepath); });
                 $fh = fopen($filepath, 'w');
                 fwrite($fh, $rawData);
                 fclose($fh);
                 exec('sudo mount -o remount,rw /');
-                exec('sudo cp /tmp/a8h4d8n3c83h4.tmp /etc/crontab');
+                exec('sudo cp ' . escapeshellarg($filepath) . ' /etc/crontab');
                 exec('sudo chmod 644 /etc/crontab');
                 exec('sudo chown root:root /etc/crontab');
                 exec('sudo mount -o remount,ro /');
 
-                // Re-open the file and read it
-                $fh = fopen($filepath, 'r');
-                $theData = fread($fh, filesize($filepath));
-                fclose($fh);
+                // Re-render: just-saved $rawData is what's now on disk.
+                $theData = $rawData;
         }
 } else {
-        // File Wrangling
-        exec('sudo cp /etc/crontab /tmp/a8h4d8n3c83h4.tmp');
-        exec('sudo chown www-data:www-data /tmp/a8h4d8n3c83h4.tmp');
-        exec('sudo chmod 600 /tmp/a8h4d8n3c83h4.tmp');
-
-        // Open the file and read it
-        $filepath = '/tmp/a8h4d8n3c83h4.tmp';
-        // Clean up the /tmp staging file on script exit so the
-        // editor's potentially-secrets-bearing copy of /etc/<config>
-        // doesn't persist between requests. @-suppression handles
-        // the case where a sudo mv (e.g. fulledit_bmapikey) already
-        // consumed the staging file before script end.
+        // A3-3 — see edit_ircddbgateway.php for the full TOCTOU rationale.
+        $filepath = tempnam('/tmp', 'pistar-edit-');
         register_shutdown_function(function() use ($filepath) { @unlink($filepath); });
+        exec('sudo cp /etc/crontab ' . escapeshellarg($filepath));
+        exec('sudo chown www-data:www-data ' . escapeshellarg($filepath));
+        exec('sudo chmod 600 ' . escapeshellarg($filepath));
         $fh = fopen($filepath, 'r');
         $theData = fread($fh, filesize($filepath));
         fclose($fh);

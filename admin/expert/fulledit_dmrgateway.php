@@ -56,25 +56,20 @@ require_once('../config/version.php');
   <?php include './header-menu.inc'; ?>
   <div class="contentwide">
   <?php
-if(isset($_POST['data'])) {
-        // File Wrangling
-        exec('sudo cp /etc/dmrgateway /tmp/fmehg65694eg_full.tmp');
-        exec('sudo chown www-data:www-data /tmp/fmehg65694eg_full.tmp');
-        exec('sudo chmod 600 /tmp/fmehg65694eg_full.tmp');
+// A3-3 — see edit_ircddbgateway.php for the full TOCTOU rationale.
+$filepath = tempnam('/tmp', 'pistar-edit-');
+register_shutdown_function(function() use ($filepath) { @unlink($filepath); });
+exec('sudo cp /etc/dmrgateway ' . escapeshellarg($filepath));
+exec('sudo chown www-data:www-data ' . escapeshellarg($filepath));
+exec('sudo chmod 600 ' . escapeshellarg($filepath));
 
-        // Open the file and write the data
-        $filepath = '/tmp/fmehg65694eg_full.tmp';
-        // Clean up the /tmp staging file on script exit so the
-        // editor's potentially-secrets-bearing copy of /etc/<config>
-        // doesn't persist between requests. @-suppression handles
-        // the case where a sudo mv (e.g. fulledit_bmapikey) already
-        // consumed the staging file before script end.
-        register_shutdown_function(function() use ($filepath) { @unlink($filepath); });
+if(isset($_POST['data'])) {
+        // Write submitted data into the staging file.
         $fh = fopen($filepath, 'w');
         fwrite($fh, $_POST['data']);
         fclose($fh);
         exec('sudo mount -o remount,rw /');
-        exec('sudo cp /tmp/fmehg65694eg_full.tmp /etc/dmrgateway');
+        exec('sudo cp ' . escapeshellarg($filepath) . ' /etc/dmrgateway');
         exec('sudo chmod 644 /etc/dmrgateway');
         exec('sudo chown root:root /etc/dmrgateway');
         exec('sudo mount -o remount,ro /');
@@ -82,28 +77,11 @@ if(isset($_POST['data'])) {
         // Reload the affected daemon
     exec('sudo systemctl restart mmdvmhost.service');            // Reload MMDVMHost
     exec('sudo systemctl restart dmrgateway.service');            // Reload DMRGateway
-
-        // Re-open the file and read it
-        $fh = fopen($filepath, 'r');
-        $theData = fread($fh, filesize($filepath));
-
-} else {
-        // File Wrangling
-        exec('sudo cp /etc/dmrgateway /tmp/fmehg65694eg_full.tmp');
-        exec('sudo chown www-data:www-data /tmp/fmehg65694eg_full.tmp');
-        exec('sudo chmod 600 /tmp/fmehg65694eg_full.tmp');
-
-        // Open the file and read it
-        $filepath = '/tmp/fmehg65694eg_full.tmp';
-        // Clean up the /tmp staging file on script exit so the
-        // editor's potentially-secrets-bearing copy of /etc/<config>
-        // doesn't persist between requests. @-suppression handles
-        // the case where a sudo mv (e.g. fulledit_bmapikey) already
-        // consumed the staging file before script end.
-        register_shutdown_function(function() use ($filepath) { @unlink($filepath); });
-        $fh = fopen($filepath, 'r');
-        $theData = fread($fh, filesize($filepath));
 }
+
+// Re-read for the form's textarea.
+$fh = fopen($filepath, 'r');
+$theData = fread($fh, filesize($filepath));
 fclose($fh);
 
 ?>

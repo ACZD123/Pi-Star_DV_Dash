@@ -54,54 +54,31 @@ require_once('../config/version.php');
   <?php include './header-menu.inc'; ?>
   <div class="contentwide">
   <?php
-if(isset($_POST['data'])) {
-        // File Wrangling
-        exec('sudo cp /usr/local/etc/RSSI.dat /tmp/yAw432GHs5.tmp');
-        exec('sudo chown www-data:www-data /tmp/yAw432GHs5.tmp');
-        exec('sudo chmod 600 /tmp/yAw432GHs5.tmp');
+// A3-3 — see edit_ircddbgateway.php for the full TOCTOU rationale.
+$filepath = tempnam('/tmp', 'pistar-edit-');
+register_shutdown_function(function() use ($filepath) { @unlink($filepath); });
+exec('sudo cp /usr/local/etc/RSSI.dat ' . escapeshellarg($filepath));
+exec('sudo chown www-data:www-data ' . escapeshellarg($filepath));
+exec('sudo chmod 600 ' . escapeshellarg($filepath));
 
-        // Open the file and write the data
-        $filepath = '/tmp/yAw432GHs5.tmp';
-        // Clean up the /tmp staging file on script exit so the
-        // editor's potentially-secrets-bearing copy of /etc/<config>
-        // doesn't persist between requests. @-suppression handles
-        // the case where a sudo mv (e.g. fulledit_bmapikey) already
-        // consumed the staging file before script end.
-        register_shutdown_function(function() use ($filepath) { @unlink($filepath); });
+if(isset($_POST['data'])) {
+        // Write submitted data into the staging file.
         $fh = fopen($filepath, 'w');
         fwrite($fh, $_POST['data']);
         fclose($fh);
-        // Atomic install: content + mode + owner set in one syscall
-        // sequence. Same rationale as the bmapikey/dapnetapi B5 work
-        // and the parallel pistar-remote / pistar-css.ini migrations.
-        // /usr/local/etc/RSSI.dat is read by the MMDVMHost daemon
-        // (root) and is world-readable for the dashboard's editor
-        // round-trip; 644 root:root preserves both.
+        // Atomic install: /usr/local/etc/RSSI.dat is read by the
+        // MMDVMHost daemon (root) and is world-readable for the
+        // dashboard's editor round-trip; 644 root:root preserves both.
         exec('sudo mount -o remount,rw /');
-        exec('sudo install -m 644 -o root -g root /tmp/yAw432GHs5.tmp /usr/local/etc/RSSI.dat');
+        exec('sudo install -m 644 -o root -g root '
+             . escapeshellarg($filepath) . ' /usr/local/etc/RSSI.dat');
         exec('sudo mount -o remount,ro /');
-
-        // Re-open the file and read it
-        $fh = fopen($filepath, 'r');
-        $theData = fread($fh, filesize($filepath));
-
-} else {
-        // File Wrangling
-        exec('sudo cp /usr/local/etc/RSSI.dat /tmp/yAw432GHs5.tmp');
-        exec('sudo chown www-data:www-data /tmp/yAw432GHs5.tmp');
-        exec('sudo chmod 600 /tmp/yAw432GHs5.tmp');
-
-        // Open the file and read it
-        $filepath = '/tmp/yAw432GHs5.tmp';
-        // Clean up the /tmp staging file on script exit so the
-        // editor's potentially-secrets-bearing copy of /etc/<config>
-        // doesn't persist between requests. @-suppression handles
-        // the case where a sudo mv (e.g. fulledit_bmapikey) already
-        // consumed the staging file before script end.
-        register_shutdown_function(function() use ($filepath) { @unlink($filepath); });
-        $fh = fopen($filepath, 'r');
-        $theData = fread($fh, filesize($filepath));
 }
+
+// Re-read for the form's textarea (POST: shows just-saved content;
+// GET: shows current /etc content).
+$fh = fopen($filepath, 'r');
+$theData = fread($fh, filesize($filepath));
 fclose($fh);
 
 ?>

@@ -54,58 +54,40 @@ require_once('../config/version.php');
   <?php include './header-menu.inc'; ?>
   <div class="contentwide">
   <?php
-if(isset($_POST['data'])) {
-        // File Wrangling
-        exec('sudo cp /etc/pistar-remote /tmp/fmehg65934eg.tmp');
-        exec('sudo chown www-data:www-data /tmp/fmehg65934eg.tmp');
-        exec('sudo chmod 600 /tmp/fmehg65934eg.tmp');
+// A3-3 — see edit_ircddbgateway.php for the full TOCTOU rationale.
+// tempnam() up front so both POST and GET branches share the same
+// per-request random staging path. Cleanup is registered once.
+$filepath = tempnam('/tmp', 'pistar-edit-');
+register_shutdown_function(function() use ($filepath) { @unlink($filepath); });
+exec('sudo cp /etc/pistar-remote ' . escapeshellarg($filepath));
+exec('sudo chown www-data:www-data ' . escapeshellarg($filepath));
+exec('sudo chmod 600 ' . escapeshellarg($filepath));
 
-        // Open the file and write the data
-        $filepath = '/tmp/fmehg65934eg.tmp';
-        // Clean up the /tmp staging file on script exit so the
-        // editor's potentially-secrets-bearing copy of /etc/<config>
-        // doesn't persist between requests. @-suppression handles
-        // the case where a sudo mv (e.g. fulledit_bmapikey) already
-        // consumed the staging file before script end.
-        register_shutdown_function(function() use ($filepath) { @unlink($filepath); });
+if(isset($_POST['data'])) {
+        // Write submitted data into the staging file.
         $fh = fopen($filepath, 'w');
         fwrite($fh, $_POST['data']);
         fclose($fh);
         // Atomic install: content + mode + owner set in one syscall
-        // sequence. Collapses the prior cp + chmod + chown trio so an
-        // interrupted RW window can't leave /etc/pistar-remote at the
-        // staging file's www-data:www-data 600. /etc/pistar-remote is
-        // read by the pistar-remote.service daemon and by dashboard
-        // pages via parse_ini_file (no sudo); 644 root:root keeps both
-        // working — same target as the bmapikey/dapnetapi B5 migration.
+        // sequence. /etc/pistar-remote is read by the pistar-remote
+        // service daemon and by dashboard pages via parse_ini_file
+        // (no sudo); 644 root:root keeps both working — same target
+        // as the bmapikey/dapnetapi B5 migration.
         exec('sudo mount -o remount,rw /');
-        exec('sudo install -m 644 -o root -g root /tmp/fmehg65934eg.tmp /etc/pistar-remote');
+        exec('sudo install -m 644 -o root -g root '
+             . escapeshellarg($filepath) . ' /etc/pistar-remote');
         exec('sudo mount -o remount,ro /');
 
         // Reload the affected daemon
             exec('sudo systemctl restart pistar-remote.service');            // Reload the daemon
-
-        // Re-open the file and read it
-        $fh = fopen($filepath, 'r');
-        $theData = fread($fh, filesize($filepath));
-
-} else {
-        // File Wrangling
-        exec('sudo cp /etc/pistar-remote /tmp/fmehg65934eg.tmp');
-        exec('sudo chown www-data:www-data /tmp/fmehg65934eg.tmp');
-        exec('sudo chmod 600 /tmp/fmehg65934eg.tmp');
-
-        // Open the file and read it
-        $filepath = '/tmp/fmehg65934eg.tmp';
-        // Clean up the /tmp staging file on script exit so the
-        // editor's potentially-secrets-bearing copy of /etc/<config>
-        // doesn't persist between requests. @-suppression handles
-        // the case where a sudo mv (e.g. fulledit_bmapikey) already
-        // consumed the staging file before script end.
-        register_shutdown_function(function() use ($filepath) { @unlink($filepath); });
-        $fh = fopen($filepath, 'r');
-        $theData = fread($fh, filesize($filepath));
 }
+
+// Re-read the staging file for the form's textarea — in the POST
+// branch this returns what the operator just submitted (and what's
+// now in /etc); in the GET branch it returns the unmodified /etc
+// content.
+$fh = fopen($filepath, 'r');
+$theData = fread($fh, filesize($filepath));
 fclose($fh);
 
 ?>

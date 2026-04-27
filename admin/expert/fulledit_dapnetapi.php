@@ -55,30 +55,24 @@ require_once('../config/version.php');
   <div class="contentwide">
 
 <?php
-// Make the bare config if we dont have one
-if (file_exists('/etc/dapnetapi.key')) {
-    exec('sudo cp /etc/dapnetapi.key /tmp/jsADGHwf9sj294.tmp');
-    exec('sudo chown www-data:www-data /tmp/jsADGHwf9sj294.tmp');
-} else {
-    exec('sudo touch /tmp/jsADGHwf9sj294.tmp');
-    exec('sudo chown www-data:www-data /tmp/jsADGHwf9sj294.tmp');
-    exec('echo "[DAPNETAPI]" > /tmp/jsADGHwf9sj294.tmp');
-    exec('echo "USER=" >> /tmp/jsADGHwf9sj294.tmp');
-    exec('echo "PASS=" >> /tmp/jsADGHwf9sj294.tmp');
-    exec('echo "TRXAREA=" >> /tmp/jsADGHwf9sj294.tmp');
-}
-
-//Do some file wrangling...
-exec('sudo chmod 600 /tmp/jsADGHwf9sj294.tmp');
-
-//ini file to open
-$filepath = '/tmp/jsADGHwf9sj294.tmp';
-// Clean up the /tmp staging file on script exit so the
-// editor's potentially-secrets-bearing copy of /etc/<config>
-// doesn't persist between requests. @-suppression handles
-// the case where a sudo mv (e.g. fulledit_bmapikey) already
-// consumed the staging file before script end.
+// A3-3 — see edit_ircddbgateway.php for the full TOCTOU rationale.
+// /etc/dapnetapi.key holds DAPNET credentials, so the random-name
+// TOCTOU defence is more important here than for the other editors.
+$filepath = tempnam('/tmp', 'pistar-edit-');
 register_shutdown_function(function() use ($filepath) { @unlink($filepath); });
+if (file_exists('/etc/dapnetapi.key')) {
+    exec('sudo cp /etc/dapnetapi.key ' . escapeshellarg($filepath));
+} else {
+    // Seed the staging file with the empty-config skeleton.
+    // tempnam already created it owned by www-data, so PHP-side
+    // file_put_contents writes through directly.
+    file_put_contents(
+        $filepath,
+        "[DAPNETAPI]\nUSER=\nPASS=\nTRXAREA=\n"
+    );
+}
+exec('sudo chown www-data:www-data ' . escapeshellarg($filepath));
+exec('sudo chmod 600 ' . escapeshellarg($filepath));
 
 //after the form submit
 if($_POST) {
@@ -130,7 +124,8 @@ if($_POST) {
         // (and dashboard reads it directly without sudo elsewhere);
         // see fulledit_bmapikey.php for the same rationale.
         exec('sudo mount -o remount,rw /');
-        exec('sudo install -m 600 -o www-data -g www-data /tmp/jsADGHwf9sj294.tmp /etc/dapnetapi.key');
+        exec('sudo install -m 600 -o www-data -g www-data '
+             . escapeshellarg($filepath) . ' /etc/dapnetapi.key');
         exec('sudo mount -o remount,ro /');
 
         return $success;

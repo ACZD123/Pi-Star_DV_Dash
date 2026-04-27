@@ -55,54 +55,38 @@ require_once('../config/version.php');
   <?php include './header-menu.inc'; ?>
   <div class="contentwide">
   <?php
-if(isset($_POST['data'])) {
-        // File Wrangling
-        exec('sudo cp /etc/wpa_supplicant/wpa_supplicant.conf /tmp/k45s7h5s9k3.tmp');
-        exec('sudo chown www-data:www-data /tmp/k45s7h5s9k3.tmp');
-        exec('sudo chmod 600 /tmp/k45s7h5s9k3.tmp');
+// A3-3 — see edit_ircddbgateway.php for the full TOCTOU rationale.
+// wpa_supplicant.conf carries the WPA PSK in cleartext, so the
+// random-name TOCTOU defence is more important here than for the
+// other editors: a predictable name attack would let a local
+// attacker pre-create /tmp/<known>.tmp as a symlink to a target
+// they control reading and have our `sudo cp` follow it.
+$filepath = tempnam('/tmp', 'pistar-edit-');
+register_shutdown_function(function() use ($filepath) { @unlink($filepath); });
+exec('sudo cp /etc/wpa_supplicant/wpa_supplicant.conf ' . escapeshellarg($filepath));
+exec('sudo chown www-data:www-data ' . escapeshellarg($filepath));
+exec('sudo chmod 600 ' . escapeshellarg($filepath));
 
-        // Open the file and write the data
-        $filepath = '/tmp/k45s7h5s9k3.tmp';
-        // Clean up the /tmp staging file on script exit so the
-        // editor's potentially-secrets-bearing copy of /etc/<config>
-        // doesn't persist between requests. @-suppression handles
-        // the case where a sudo mv (e.g. fulledit_bmapikey) already
-        // consumed the staging file before script end.
-        register_shutdown_function(function() use ($filepath) { @unlink($filepath); });
+if(isset($_POST['data'])) {
+        // Write submitted data into the staging file.
         $fh = fopen($filepath, 'w');
         fwrite($fh, $_POST['data']);
         fclose($fh);
-        exec('sudo mount -o remount,rw /');
         // Atomic install: mode + owner set in one syscall sequence.
         // wpa_supplicant.conf carries the WPA PSK in cleartext as
         // `psk=…hex…` — mode 600 root:root keeps every other local
         // user (and any sandbox-escape from another service) from
         // reading it. wpa_supplicant runs as root, so the daemon's
         // own access is unaffected.
-        exec('sudo install -m 600 -o root -g root /tmp/k45s7h5s9k3.tmp /etc/wpa_supplicant/wpa_supplicant.conf');
+        exec('sudo mount -o remount,rw /');
+        exec('sudo install -m 600 -o root -g root '
+             . escapeshellarg($filepath) . ' /etc/wpa_supplicant/wpa_supplicant.conf');
         exec('sudo mount -o remount,ro /');
-
-        // Re-open the file and read it
-        $fh = fopen($filepath, 'r');
-        $theData = fread($fh, filesize($filepath));
-
-} else {
-        // File Wrangling
-        exec('sudo cp /etc/wpa_supplicant/wpa_supplicant.conf /tmp/k45s7h5s9k3.tmp');
-        exec('sudo chown www-data:www-data /tmp/k45s7h5s9k3.tmp');
-        exec('sudo chmod 600 /tmp/k45s7h5s9k3.tmp');
-
-        // Open the file and read it
-        $filepath = '/tmp/k45s7h5s9k3.tmp';
-        // Clean up the /tmp staging file on script exit so the
-        // editor's potentially-secrets-bearing copy of /etc/<config>
-        // doesn't persist between requests. @-suppression handles
-        // the case where a sudo mv (e.g. fulledit_bmapikey) already
-        // consumed the staging file before script end.
-        register_shutdown_function(function() use ($filepath) { @unlink($filepath); });
-        $fh = fopen($filepath, 'r');
-        $theData = fread($fh, filesize($filepath));
 }
+
+// Re-read for the form's textarea.
+$fh = fopen($filepath, 'r');
+$theData = fread($fh, filesize($filepath));
 fclose($fh);
 
 ?>
