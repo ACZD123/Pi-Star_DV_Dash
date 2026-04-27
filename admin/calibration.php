@@ -82,16 +82,43 @@ if ($_SERVER["PHP_SELF"] == "/admin/calibration.php") {
           system('nc -ulp 33273 -s 127.0.0.1 | sudo -i script -qfc "/usr/local/sbin/pistar-mmdvmcal" /tmp/pi-star_mmdvmcal.log > /dev/null 2>&1 &');
       } elseif ($_POST['action'] === 'saveoffset') {
           if (isset($_POST['param']) && strlen($_POST['param'])) {
-              // intval() forces an integer — no shell metachar can
-              // survive into the sed pipeline. The signed range is
-              // fine; mmdvmhost accepts negative offsets.
+              // intval() forces an integer — mmdvmhost accepts a
+              // signed integer offset (negative is fine).
               $offset = intval($_POST['param']);
-              system('sudo mount -o remount,rw /');
-              system('sudo sed -i "/RXOffset=/c\\RXOffset=' . $offset . '" /etc/mmdvmhost');
-              system('sudo sed -i "/TXOffset=/c\\TXOffset=' . $offset . '" /etc/mmdvmhost');
-              // Re-seal the rootfs — the original handler was missing
-              // this and left `/` writable after a save.
-              system('sudo mount -o remount,ro /');
+
+              // L-7: drop the prior `sudo sed -i` pair in favour of a
+              // PHP-side rewrite + atomic install. The two RXOffset/
+              // TXOffset keys live in /etc/mmdvmhost's [Modem] section;
+              // the stock config has exactly one occurrence of each
+              // line at start-of-line, so an anchored preg_replace is
+              // safe without full INI section awareness. /etc/mmdvmhost
+              // is mode 644 so the read does not need sudo.
+              $mmdvmContent = @file_get_contents('/etc/mmdvmhost');
+              if ($mmdvmContent !== false) {
+                  $mmdvmContent = preg_replace(
+                      '/^RXOffset=.*$/m',
+                      'RXOffset=' . $offset,
+                      $mmdvmContent
+                  );
+                  $mmdvmContent = preg_replace(
+                      '/^TXOffset=.*$/m',
+                      'TXOffset=' . $offset,
+                      $mmdvmContent
+                  );
+                  $stage = '/tmp/pistar-calib-mmdvmhost.tmp';
+                  file_put_contents($stage, $mmdvmContent);
+
+                  // Atomic install (B5/L-5 pattern). Re-seal the rootfs
+                  // on every exit path — the original handler had a
+                  // bug here that's preserved by the new envelope.
+                  system('sudo mount -o remount,rw /');
+                  system('sudo install -m 644 -o root -g root '
+                       . escapeshellarg($stage) . ' /etc/mmdvmhost');
+                  system('sudo mount -o remount,ro /');
+                  @unlink($stage);
+              } else {
+                  error_log('Pi-Star calibration.php: /etc/mmdvmhost unreadable; saveoffset skipped');
+              }
           }
       }
       // Anything else: silent ignore (could be a stale form replay or
