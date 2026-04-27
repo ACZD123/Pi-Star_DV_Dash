@@ -196,6 +196,20 @@ function csrf_session_start()
             @ini_set('session.gc_probability', '1');
             @ini_set('session.gc_divisor', '1');
         }
+        // gc_maxlifetime is intentionally NOT overridden here — we
+        // defer to Pi-Star's stock /etc/php/*/fpm/php.ini value
+        // (1440 s, matching PHP's own default). The dashboard's
+        // AJAX-refreshing panels (lh.php, repeaterinfo.php, the
+        // bm_links / tgif_links partials, etc.) do not load csrf.php,
+        // so they don't update the session file's mtime — meaning the
+        // session counts as "idle" from the moment csrf_verify() last
+        // ran on a top-level page load, even while the dashboard is
+        // visibly active in the operator's tab. Anything shorter than
+        // ~24 min would routinely 403 BM-manager / TGIF-manager /
+        // configure.php POSTs whenever the operator left the dashboard
+        // tab open between page loads. tmpfs containment is the
+        // pre-emptive prune below, not maxlifetime.
+        //
         // Pi-Star's /var/lib/php/sessions tmpfs is sized 64 KB (per
         // /etc/fstab in the OS image) — about 15 session files at
         // a 4 KB tmpfs block each. csrf.php is only loaded behind
@@ -208,26 +222,13 @@ function csrf_session_start()
         // the operator — they get a 403 on the next form submit
         // because $_SESSION['csrf_token'] could not be persisted.
         //
-        // Lower gc_maxlifetime to 600 s (10 min) so the next request
-        // after a stale-session pile-up sweeps the directory clear.
-        // gc_probability=1/1 above means GC runs on every
-        // session_start(), so recovery is at most one request away
-        // once the 10 min window has passed. Trade-off: an operator
-        // idle >10 min gets a 403 on form submit, but a page reload
-        // (basic-auth + cookie still held by the browser) re-issues
-        // a fresh CSRF token immediately. AJAX-polling pages
-        // (update.php, live_modem_log.php, calibration.php) keep
-        // their session mtime fresh on every poll, so GC never
-        // sees them as expired.
-        @ini_set('session.gc_maxlifetime', '600');
         // Belt-and-braces safety net: cap the session directory at
         // 12 files BEFORE session_start() tries to write a new one.
-        // gc_maxlifetime above only deletes sessions older than
-        // 600 s — a burst of fresh-cookie requests (all <600 s old)
-        // can still fill the 64 KB tmpfs and surface as
-        // "No space left on device". This pre-emptive prune deletes
-        // the oldest sess_* files until 12 remain, leaving 3 slots
-        // of headroom under the ~15-file tmpfs cap.
+        // GC alone won't help here because a burst of fresh-cookie
+        // requests can fill the 64 KB tmpfs faster than gc_maxlifetime
+        // expires anything. This pre-emptive prune deletes the
+        // oldest sess_* files until 12 remain, leaving ~3 slots of
+        // headroom under the ~15-file tmpfs cap.
         //
         // Best-effort: any failure here (permissions, missing dir,
         // glob/unlink errors) is silently ignored — session_start()
@@ -235,8 +236,8 @@ function csrf_session_start()
         // existing failure-logging path below. Worst case for an
         // evicted session is an operator gets a 403 on the next
         // form submit and a page reload re-issues a token, which
-        // is the same UX as gc_maxlifetime expiry and far better
-        // than the disk-full failure this guards against.
+        // is far better than the disk-full failure this guards
+        // against.
         $sessSaveDir = (string)@ini_get('session.save_path');
         if ($sessSaveDir !== '') {
             $sessFiles = @glob($sessSaveDir . '/sess_*');
