@@ -795,22 +795,61 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
       $configdmrgateway['Info']['URL'] = $txtURL;
     }
 
-    // Set the APRS Host for ircDDBGateway. (C6 migration — sed sites
-    // replaced with helper. The picklist for selectedAPRSHost is
-    // server-rendered from a fixed list of APRS-IS servers, so the
-    // value reaching this handler should always be a known hostname.)
+    // Set the APRS Host for ircDDBGateway. The picklist for
+    // selectedAPRSHost is server-rendered from APRSHosts.txt
+    // (~10 entries), so the value reaching this handler should
+    // always be one of those hostnames — but the form is just
+    // HTML, and a forged POST or a stale tab editing the DOM can
+    // submit any string. Without a server-side check the value
+    // would land verbatim in /etc/ircddbgateway, /etc/aprsgateway,
+    // and four ysfgateway INI configs, all of which are read by
+    // their respective daemons; an arbitrary string there at best
+    // breaks APRS-IS connectivity, at worst gets an unrelated
+    // hostname embedded in subsequent log lines.
+    //
+    // Whitelist mirrors the same APRSHosts.txt parse the picklist
+    // uses (line ~4318) — same fopen + fgets + preg_split('/:/')
+    // shape so any future format change in APRSHosts.txt only
+    // needs to be reflected in one helper if we extract it later.
+    // Reject silently (no config write) on mismatch; B3-style
+    // error_log so a forged submit leaves a forensic breadcrumb.
     if (empty($_POST['selectedAPRSHost']) != TRUE) {
-      $aprsHost = $_POST['selectedAPRSHost'];
-      config_writer_stage_flat('/etc/ircddbgateway', 'aprsHostname', $aprsHost);
-      $configysfgateway['aprs.fi']['Server'] = $aprsHost;
-      $configysf2dmr['aprs.fi']['Server']    = $aprsHost;
-      $configysf2nxdn['aprs.fi']['Server']   = $aprsHost;
-      $configysf2p25['aprs.fi']['Server']    = $aprsHost;
-      $configysf2dmr['aprs.fi']['Enable']    = "0";
-      $configysf2nxdn['aprs.fi']['Enable']   = "0";
-      $configysf2p25['aprs.fi']['Enable']    = "0";
-      if ($configPistarRelease['Pi-Star']['Version'] >= "4.1.4") {
-        config_writer_stage_flat('/etc/aprsgateway', 'Server', $aprsHost);
+      $validAPRSHosts = array();
+      $aprsHostFileV  = @fopen('/usr/local/etc/APRSHosts.txt', 'r');
+      if ($aprsHostFileV) {
+        while (!feof($aprsHostFileV)) {
+          $aprsHostLine = fgets($aprsHostFileV);
+          if ($aprsHostLine === false) { break; }
+          $parts = preg_split('/:/', $aprsHostLine);
+          if (isset($parts[0]) && $parts[0] !== ''
+              && strpos($parts[0], ';') === false) {
+            // trim() absorbs CRLF endings or stray trailing whitespace
+            // in APRSHosts.txt (the picklist's <option value="…"> is
+            // similarly whitespace-stripped by the browser, so the
+            // POSTed value is already trimmed). Done at build-time
+            // only — POST-side stays strict so a forged "  host"
+            // can't match a whitelisted "host".
+            $validAPRSHosts[] = trim($parts[0]);
+          }
+        }
+        fclose($aprsHostFileV);
+      }
+      if (in_array($_POST['selectedAPRSHost'], $validAPRSHosts, true)) {
+        $aprsHost = $_POST['selectedAPRSHost'];
+        config_writer_stage_flat('/etc/ircddbgateway', 'aprsHostname', $aprsHost);
+        $configysfgateway['aprs.fi']['Server'] = $aprsHost;
+        $configysf2dmr['aprs.fi']['Server']    = $aprsHost;
+        $configysf2nxdn['aprs.fi']['Server']   = $aprsHost;
+        $configysf2p25['aprs.fi']['Server']    = $aprsHost;
+        $configysf2dmr['aprs.fi']['Enable']    = "0";
+        $configysf2nxdn['aprs.fi']['Enable']   = "0";
+        $configysf2p25['aprs.fi']['Enable']    = "0";
+        if ($configPistarRelease['Pi-Star']['Version'] >= "4.1.4") {
+          config_writer_stage_flat('/etc/aprsgateway', 'Server', $aprsHost);
+        }
+      } else {
+        error_log('Pi-Star configure.php: rejected selectedAPRSHost='
+                . substr((string)$_POST['selectedAPRSHost'], 0, 64));
       }
     }
 
