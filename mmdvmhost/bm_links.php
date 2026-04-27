@@ -87,17 +87,24 @@ if ( $testMMDVModeDMR == 1 ) {
   $bmStaticTGList = "";
   $bmDynamicTGList = "";
 
-  // Pull the information form JSON
+  // Pull the information from JSON. talkgroup/slot are documented
+  // as integers in the BrandMeister API but PHP's json_decode
+  // doesn't enforce that — cast to (int) so a hostile / compromised
+  // upstream response can't smuggle HTML/JS into the rendered <td>
+  // bytes below. (int) of a non-numeric string is 0, which renders
+  // as plain "0" — predictable, inert.
   if (isset($json->staticSubscriptions)) { $bmStaticTGListJson = $json->staticSubscriptions;
                                           foreach($bmStaticTGListJson as $staticTG) {
-                                            if (getConfigItem("DMR Network", "Slot1", $mmdvmconfigs) && $staticTG->slot == "1") {
-                                              $bmStaticTGList .= "TG".$staticTG->talkgroup."(".$staticTG->slot.") ";
+                                            $tgNum = (int)$staticTG->talkgroup;
+                                            $tgSlot = (int)$staticTG->slot;
+                                            if (getConfigItem("DMR Network", "Slot1", $mmdvmconfigs) && $tgSlot === 1) {
+                                              $bmStaticTGList .= "TG".$tgNum."(".$tgSlot.") ";
                                             }
-                                            else if (getConfigItem("DMR Network", "Slot2", $mmdvmconfigs) && $staticTG->slot == "2") {
-                                              $bmStaticTGList .= "TG".$staticTG->talkgroup."(".$staticTG->slot.") ";
+                                            else if (getConfigItem("DMR Network", "Slot2", $mmdvmconfigs) && $tgSlot === 2) {
+                                              $bmStaticTGList .= "TG".$tgNum."(".$tgSlot.") ";
                                             }
-                                            else if (getConfigItem("DMR Network", "Slot1", $mmdvmconfigs) == "0" && getConfigItem("DMR Network", "Slot2", $mmdvmconfigs) && $staticTG->slot == "0") {
-                                              $bmStaticTGList .= "TG".$staticTG->talkgroup." ";
+                                            else if (getConfigItem("DMR Network", "Slot1", $mmdvmconfigs) == "0" && getConfigItem("DMR Network", "Slot2", $mmdvmconfigs) && $tgSlot === 0) {
+                                              $bmStaticTGList .= "TG".$tgNum." ";
                                             }
                                           }
                                           $bmStaticTGList = wordwrap($bmStaticTGList, 15, "<br />\n");
@@ -105,14 +112,16 @@ if ( $testMMDVModeDMR == 1 ) {
                                          } else { $bmStaticTGList = "None"; }
   if (isset($json->dynamicSubscriptions)) { $bmDynamicTGListJson = $json->dynamicSubscriptions;
                                            foreach($bmDynamicTGListJson as $dynamicTG) {
-                                             if (getConfigItem("DMR Network", "Slot1", $mmdvmconfigs) && $dynamicTG->slot == "1") {
-                                               $bmDynamicTGList .= "TG".$dynamicTG->talkgroup."(".$dynamicTG->slot.") ";
+                                             $tgNum = (int)$dynamicTG->talkgroup;
+                                             $tgSlot = (int)$dynamicTG->slot;
+                                             if (getConfigItem("DMR Network", "Slot1", $mmdvmconfigs) && $tgSlot === 1) {
+                                               $bmDynamicTGList .= "TG".$tgNum."(".$tgSlot.") ";
                                              }
-                                             else if (getConfigItem("DMR Network", "Slot2", $mmdvmconfigs) && $dynamicTG->slot == "2") {
-                                               $bmDynamicTGList .= "TG".$dynamicTG->talkgroup."(".$dynamicTG->slot.") ";
+                                             else if (getConfigItem("DMR Network", "Slot2", $mmdvmconfigs) && $tgSlot === 2) {
+                                               $bmDynamicTGList .= "TG".$tgNum."(".$tgSlot.") ";
                                              }
-                                             else if (getConfigItem("DMR Network", "Slot1", $mmdvmconfigs) == "0" && getConfigItem("DMR Network", "Slot2", $mmdvmconfigs) && $dynamicTG->slot == "0") {
-                                               $bmDynamicTGList .= "TG".$dynamicTG->talkgroup." ";
+                                             else if (getConfigItem("DMR Network", "Slot1", $mmdvmconfigs) == "0" && getConfigItem("DMR Network", "Slot2", $mmdvmconfigs) && $tgSlot === 0) {
+                                               $bmDynamicTGList .= "TG".$tgNum." ";
                                              }
                                            }
                                            $bmDynamicTGList = wordwrap($bmDynamicTGList, 15, "<br />\n");
@@ -129,8 +138,13 @@ if ( $testMMDVModeDMR == 1 ) {
     </tr>'."\n";
 
   echo '    <tr>'."\n";
-  echo '      <td>'.$dmrMasterHost.'</td>';
-  echo '<td>'.$dmrID.'</td>';
+  // $dmrMasterHost / $dmrID come from /etc/dmrgateway — operator
+  // edits via the expert editor. htmlspecialchars defence-in-depth.
+  // $bmStatic/DynamicTGList already contain wordwrap-injected `<br />`
+  // tags by design, so they intentionally aren't escaped here; the
+  // talkgroup/slot integers inside them were cast to (int) above.
+  echo '      <td>'.htmlspecialchars((string)$dmrMasterHost, ENT_QUOTES, 'UTF-8').'</td>';
+  echo '<td>'.htmlspecialchars((string)$dmrID, ENT_QUOTES, 'UTF-8').'</td>';
   echo '<td>'.$bmStaticTGList.'</td>';
   echo '<td>'.$bmDynamicTGList.'</td>';
   echo '</tr>'."\n";
