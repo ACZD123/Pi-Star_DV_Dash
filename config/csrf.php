@@ -353,11 +353,35 @@ function csrf_verify()
     $expected = isset($_SESSION['csrf_token']) ? $_SESSION['csrf_token'] : '';
     $supplied = isset($_POST['csrf_token']) ? $_POST['csrf_token'] : '';
 
-    // Reject if either side is empty OR not a 64-char hex string.
-    // Reject empty BEFORE hash_equals to avoid the (harmless but
-    // ugly) constant-time-compare-against-empty-string case.
-    if (!is_string($expected) || strlen($expected) !== 64 ||
-        !is_string($supplied) || strlen($supplied) !== 64 ||
+    // Distinguish "session has no token" from "session has a token
+    // and the supplied one is wrong". The former is almost always a
+    // benign expired-session POST (operator left the dashboard tab
+    // open past gc_maxlifetime, then clicked submit) and shouldn't
+    // throw the alarmist 403 page at them. Redirect 303 to the same
+    // URL — the browser switches to GET, the page re-renders fresh
+    // (forms that pre-populate from disk come back filled in; the
+    // session_start() in csrf_session_start() issues a new token),
+    // and the operator's submit retry just works.
+    //
+    // This is safe against forgery because a real attacker would be
+    // sending against an ACTIVE operator session whose
+    // $_SESSION['csrf_token'] is non-empty — that path stays on the
+    // strict 403 below. The only thing the redirect "lets through"
+    // is a fresh form render, which any GET would also serve.
+    if ($expected === '' || !is_string($expected) || strlen($expected) !== 64) {
+        $uri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '/admin/';
+        // Defence in depth: REQUEST_URI is typically same-origin
+        // already, but force a relative path so a crafted Host or
+        // proxy can't turn this into an open redirect.
+        $uri = '/' . ltrim(preg_replace('#^https?://[^/]*#i', '', $uri), '/');
+        header('Location: ' . $uri, true, 303);
+        header('Cache-Control: no-store');
+        exit;
+    }
+
+    // Reject only when the session actually had a token but the
+    // supplied one is missing or doesn't match — that IS a forgery.
+    if (!is_string($supplied) || strlen($supplied) !== 64 ||
         !hash_equals($expected, $supplied)) {
         // Best-effort log line for the operator. The remote IP is
         // typically a LAN address but worth recording in case a
