@@ -83,7 +83,84 @@
  *   - GET requests are NOT verified. CSRF protection only applies
  *     to state-changing requests, and the dashboard's idempotent
  *     read pages are POST-free by convention.
+ *
+ *   - Session-cookie hardening. We set HttpOnly + SameSite=Lax on
+ *     every issued PHPSESSID, and Secure conditionally when the
+ *     request is HTTPS (via isHttps() in security_headers.php —
+ *     covers direct TLS to nginx AND reverse-proxy / Cloudflare
+ *     terminations that forward via X-Forwarded-Proto). See
+ *     {@see _csrf_set_cookie_params()}.
  */
+
+require_once $_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php';
+
+/**
+ * Configure the PHPSESSID cookie's flags for hardened delivery.
+ *
+ * Must be called BEFORE session_start(); has no effect once the
+ * session is active. Sets:
+ *
+ *   HttpOnly  — always. Blocks document.cookie access from JS, so
+ *               a future XSS in any rendered page can't read the
+ *               session ID. Defence in depth alongside the input
+ *               escaping work in the rest of the security pass.
+ *
+ *   SameSite=Lax — always. Browser stops sending the cookie on
+ *               cross-site subresource fetches and cross-site POSTs;
+ *               top-level navigation (clicking a bookmark, following
+ *               a same-origin redirect) still carries it, so UX
+ *               doesn't change. Belt-and-braces with the existing
+ *               CSRF-token check.
+ *
+ *   Secure    — conditional on isHttps(). UNCONDITIONALLY setting
+ *               Secure would invalidate the cookie for the (large)
+ *               population of operators on plain-HTTP LAN access
+ *               and silently break CSRF protection. isHttps() also
+ *               returns true for X-Forwarded-Proto: https — so
+ *               operators behind Cloudflare / a reverse proxy /
+ *               Tailscale Funnel get the right Secure flag even
+ *               though nginx itself only sees plain HTTP.
+ *
+ *               Trust caveat: an attacker who can talk directly
+ *               to nginx on port 80 (bypassing the proxy) could
+ *               spoof X-Forwarded-Proto and trick the dashboard
+ *               into setting Secure on their own session. The
+ *               consequence is the spoofer's cookie won't replay
+ *               over plain HTTP — a self-DoS, not an escalation.
+ *
+ * PHP version handling. The samesite option was added to
+ * session_set_cookie_params() in PHP 7.3 (the array form). On
+ * 7.0..7.2 we fall back to the well-known path-suffix kludge:
+ * appending `; SameSite=Lax` to the path argument. PHP doesn't
+ * validate the path string — it concatenates verbatim into the
+ * Set-Cookie header — and browsers parse `path=/; SameSite=Lax`
+ * correctly because `;` terminates the path attribute. The
+ * codebase floor is PHP 7.0; the production runtime is PHP 8.2.
+ *
+ * @return void
+ */
+function _csrf_set_cookie_params()
+{
+    $secure = function_exists('isHttps') ? isHttps() : false;
+    if (PHP_VERSION_ID >= 70300) {
+        // Modern array form. Available since PHP 7.3.
+        @session_set_cookie_params(array(
+            'lifetime' => 0,
+            'path'     => '/',
+            'domain'   => '',
+            'secure'   => $secure,
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ));
+    } else {
+        // PHP 7.0..7.2: no native samesite support. The path-suffix
+        // kludge is the documented workaround — see PHP RFC for
+        // 7.3's array form, where this is acknowledged as the
+        // pre-7.3 idiom. lifetime/path/domain/secure/httponly here
+        // mirror the array values above.
+        @session_set_cookie_params(0, '/; SameSite=Lax', '', $secure, true);
+    }
+}
 
 /**
  * Ensure a session is started. Idempotent.
@@ -119,6 +196,10 @@ function csrf_session_start()
             @ini_set('session.gc_probability', '1');
             @ini_set('session.gc_divisor', '1');
         }
+        // Harden the PHPSESSID cookie flags BEFORE session_start()
+        // emits the Set-Cookie header. See _csrf_set_cookie_params()
+        // for the per-flag rationale.
+        _csrf_set_cookie_params();
         // Suppress notices about headers already sent — some
         // dashboard pages emit output before this is reached.
         // The session won't be usable in that scenario, but
