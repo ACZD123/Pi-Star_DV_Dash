@@ -499,6 +499,16 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
         // enforced on every save.
         config_writer_stage_privileged_flat('/etc/hostapd/hostapd.conf', 'wpa_passphrase', $newPsk);
         config_writer_stage_privileged_flat('/etc/hostapd/hostapd.conf', 'wpa', '2');
+        // Commit immediately. This branch dies below at the
+        // "Working..." page render, BEFORE the file-level commit at
+        // line ~3712. Without this call the staged edits live only
+        // in $GLOBALS and evaporate with the request — silently
+        // dropping the operator's PSK change. False=already inside
+        // configure.php's outer mount-rw window (line 348).
+        $cfgWriterErrors = config_writer_commit(false);
+        foreach ($cfgWriterErrors as $msg) {
+          error_log('Pi-Star configure.php: ' . $msg);
+        }
       } else {
         error_log("Pi-Star configure.php: AutoAP PSK rejected (must be 8-63 printable ASCII or 64-hex)");
       }
