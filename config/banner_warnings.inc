@@ -365,7 +365,7 @@ function pistar_warnings_render()
     }
     if ($version !== ''
             && version_compare($version, '4.1.0', '>=')
-            && version_compare($version, '4.1.10', '<')) {
+            && version_compare($version, '4.1.11', '<')) {
         _pistar_banner_emit(
             'Alert: An upgrade to Pi-Star has been released, click here to upgrade now: '
             . '<a href="/admin/expert/upgrade.php" alt="Upgrade Pi-Star">Upgrade Pi-Star</a>.',
@@ -374,7 +374,7 @@ function pistar_warnings_render()
     }
     if ($version !== ''
             && version_compare($version, '4.2.0', '>=')
-            && version_compare($version, '4.2.3', '<')) {
+            && version_compare($version, '4.2.4', '<')) {
         _pistar_banner_emit(
             'Alert: An upgrade to Pi-Star has been released, click here to upgrade now: '
             . '<a href="/admin/expert/upgrade.php" alt="Upgrade Pi-Star">Upgrade Pi-Star</a>.',
@@ -383,7 +383,7 @@ function pistar_warnings_render()
     }
     if ($version !== ''
             && version_compare($version, '4.3.0', '>=')
-            && version_compare($version, '4.3.4', '<')) {
+            && version_compare($version, '4.3.5', '<')) {
         _pistar_banner_emit(
             'Alert: An upgrade to Pi-Star has been released, click here to upgrade now: '
             . '<a href="/admin/expert/upgrade.php" alt="Upgrade Pi-Star">Upgrade Pi-Star</a>.',
