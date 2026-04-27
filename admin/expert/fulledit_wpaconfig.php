@@ -67,15 +67,13 @@ if(isset($_POST['data'])) {
         fwrite($fh, $_POST['data']);
         fclose($fh);
         exec('sudo mount -o remount,rw /');
-        exec('sudo cp /tmp/k45s7h5s9k3.tmp /etc/wpa_supplicant/wpa_supplicant.conf');
-        exec('sudo chmod 644 /etc/wpa_supplicant/wpa_supplicant.conf');
-        // Restore root:root ownership. Leaving the file chowned
-        // www-data:www-data lets the dashboard process read it
-        // directly (no sudo needed), which means any code-injection
-        // bug elsewhere in the dashboard could leak the WiFi PSK
-        // verbatim. wpa_supplicant runs as root, so root:root is
-        // also what the daemon expects.
-        exec('sudo chown root:root /etc/wpa_supplicant/wpa_supplicant.conf');
+        // Atomic install: mode + owner set in one syscall sequence.
+        // wpa_supplicant.conf carries the WPA PSK in cleartext as
+        // `psk=…hex…` — mode 600 root:root keeps every other local
+        // user (and any sandbox-escape from another service) from
+        // reading it. wpa_supplicant runs as root, so the daemon's
+        // own access is unaffected.
+        exec('sudo install -m 600 -o root -g root /tmp/k45s7h5s9k3.tmp /etc/wpa_supplicant/wpa_supplicant.conf');
         exec('sudo mount -o remount,ro /');
 
         // Re-open the file and read it

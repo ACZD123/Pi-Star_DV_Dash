@@ -457,7 +457,12 @@ echo '<br />
                 }
             }
             file_put_contents('/tmp/wifidata', $config);
-            system('sudo mount -o remount,rw / && sudo cp -f /tmp/wifidata /etc/wpa_supplicant/wpa_supplicant.conf && sudo sync && sudo sync && sudo sync && sudo mount -o remount,ro /');
+            // wpa_supplicant.conf holds the WPA PSK in cleartext —
+            // install -m 600 -o root -g root keeps it readable only
+            // by root (the wpa_supplicant daemon's owner). Atomic
+            // mode+owner setting in one syscall sequence, no race
+            // window between cp and a follow-up chmod.
+            system('sudo mount -o remount,rw / && sudo install -m 600 -o root -g root /tmp/wifidata /etc/wpa_supplicant/wpa_supplicant.conf && sudo sync && sudo sync && sudo sync && sudo mount -o remount,ro /');
             echo "Wifi Settings Updated Successfully\n";
             // If Auto AP is on, don't restart the WiFi Card.
             if (!file_exists('/sys/class/net/wlan0_ap')) {
