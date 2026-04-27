@@ -43,7 +43,24 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/modem_fw_upgrade.php") {
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['modem'])) {
-        $selectedOption = $_POST['modem'];
+        // Whitelist-validate against the canonical modem list that
+        // pistar-modemupgrade itself reports. The script is the
+        // authoritative source of "what modem variants this device
+        // knows how to flash" — POSTed values that don't appear in
+        // that list are silently dropped (the operator just sees no
+        // flash happen). escapeshellarg() below is still defence-
+        // in-depth at the shell layer; this is the application-layer
+        // gate that stops the script from being invoked with
+        // attacker-controlled args at all. Mirrors the mmdvmcal
+        // command whitelist in admin/calibration.php.
+        $validModems = array_filter(array_map('trim',
+            explode("\n", (string)shell_exec('sudo /usr/local/sbin/pistar-modemupgrade list'))
+        ));
+        if (in_array($_POST['modem'], $validModems, true)) {
+            $selectedOption = $_POST['modem'];
+        } else {
+            error_log('Pi-Star modem_fw_upgrade.php: rejected modem=' . substr((string)$_POST['modem'], 0, 64));
+        }
     }
     }
 
