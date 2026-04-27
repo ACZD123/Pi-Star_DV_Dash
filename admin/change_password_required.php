@@ -88,6 +88,16 @@ if (!empty($_POST['adminPassword'])) {
         error_log('Pi-Star change_password_required.php: adminPassword rejected '
                 . '(confirmation does not match)');
     } else {
+        // Pi-Star runs with `/` mounted read-only by default. chpasswd
+        // and htpasswd both write to files on the rootfs (/etc/shadow
+        // and /var/www/.htpasswd respectively); without a remount-rw
+        // they fail with PAM "Authentication token manipulation error"
+        // and the symptom looks like every password is rejected. The
+        // matching configure.php POST handler does this at line ~348.
+        // Re-seal the rootfs at the bottom of this block on every
+        // exit path (success, PAM rejection, htpasswd failure).
+        system('sudo mount -o remount,rw /');
+
         $descriptors = array(
             0 => array('pipe', 'r'),
             1 => array('pipe', 'w'),
@@ -141,6 +151,11 @@ if (!empty($_POST['adminPassword'])) {
             // credentials on the next request.
             $passwordChanged = true;
         }
+
+        // Re-seal the rootfs on every exit path out of the writable
+        // block. sync first so the shadow / htpasswd writes land on
+        // disk before the remount makes the FS read-only again.
+        system('sudo sync && sudo sync && sudo sync && sudo mount -o remount,ro /');
     }
 }
 ?>
