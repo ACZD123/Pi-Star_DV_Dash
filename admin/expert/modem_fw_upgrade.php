@@ -72,7 +72,13 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/modem_fw_upgrade.php") {
 
     // passed sanity chk.
     header('Cache-Control: no-cache');
-    session_start();
+    // csrf_verify() at the top of the file already started the
+    // session via csrf_session_start(). Calling session_start() a
+    // second time emits a PHP Notice on PHP 8.x ("Ignoring
+    // session_start() because a session is already active") that
+    // gets logged to nginx error.log on every page load. The
+    // existing $_SESSION['update_offset'] log-tail logic below
+    // works unchanged against the already-active session.
 
     if (!isset($_GET['ajax'])) {
     if (file_exists('/var/log/pi-star/pi-star_modemflash.log')) {
