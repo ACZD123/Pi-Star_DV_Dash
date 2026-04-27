@@ -68,10 +68,8 @@ require_once('../config/version.php');
  * already grants.
  *
  * This is BASIC HARDENING — not airtight. A determined attacker can
- * bypass any pattern matcher. Acknowledged accepted bypasses:
+ * still bypass via:
  *
- *   - base64 / hex obfuscation: `echo cGFzc3dk | base64 -d | sh`
- *     decodes to `passwd` at runtime; we don't decode before scanning.
  *   - Variable indirection: `* * * * * root $X user` where $X is
  *     defined in a sourced file.
  *   - External script paths: a benign-looking `/opt/myapp/run.sh`
@@ -80,11 +78,20 @@ require_once('../config/version.php');
  *     after shell expansion but our `\b` boundary doesn't trip on
  *     the literal `passwd,` substring.
  *
+ * Obfuscation patterns are NOT an accepted bypass — there's no
+ * legitimate cron use for inline base64 / hex / eval / etc., so
+ * the second rule block below blocks every common decoder
+ * (base64 / b64decode / fromhex / xxd / openssl -d / shell hex
+ * escapes / shell unicode escapes / eval). Operators with a
+ * legitimate need to encode/decode data should put that logic in
+ * a script file, where this denylist doesn't apply.
+ *
  * The goal is to catch the obvious-bad patterns described in the
  * threat brief: password mutation, direct writes to /etc/shadow /
  * /etc/passwd / .htpasswd, and the standard shell-listener /
  * reverse-shell idioms (nc, socat exec, /dev/tcp redirects,
- * download-pipe-shell, python/perl one-liner shells).
+ * download-pipe-shell, python/perl one-liner shells), plus the
+ * obfuscation patterns commonly used to wrap them.
  *
  * Comment lines (starting with `#`) and blank lines are exempt.
  * Cron variable assignments (PATH=, MAILTO=, SHELL=) are scanned
@@ -144,6 +151,44 @@ function pistar_cron_validate($content)
         // perl reverse-shell one-liner — `perl -e \'use Socket; ...\'`
         '#\bperl\b[^\n]*-e[^\n]*\bSocket\b#i'
             => 'perl reverse-shell pattern',
+
+        // ====== Obfuscation / decoder patterns ======
+        // No legitimate cron use for inline encoded payloads. Operators
+        // who need to encode/decode something should do it in a script,
+        // not in a cron line. Catches the common payload-wrapper idioms.
+
+        // base64 in any form — the command, the python module, perl's
+        // decode_base64, etc. Substring match (no \b) so it also
+        // catches "decode_base64", "MIME::Base64", "base64.b64decode".
+        '#base64#i'
+            => 'references base64 (no legitimate cron use; payload-obfuscation idiom)',
+        // python's base64 module exposes b64decode / b64encode aliases
+        // that don't contain the literal "base64" substring.
+        '#\bb64(?:decode|encode)\b#i'
+            => 'python b64decode/b64encode (payload decoder)',
+        // python's bytes.fromhex(...) — turns a hex string into bytes
+        // for runtime execution.
+        '#\bfromhex\b#i'
+            => 'fromhex (hex payload decoder)',
+        // xxd dumps / reverses hex. Reverse mode (-r) is a payload
+        // decoder; forward mode is hex-dumping which has no cron use.
+        // Block the binary outright.
+        '#\bxxd\b#i'
+            => 'invokes xxd (hex dump / reverse-mode payload decoder)',
+        // Shell hex / unicode escape literals. `printf \'\x70\x61\x73\x73\'`
+        // spells "pass" at runtime — pure obfuscation in cron context.
+        '#\\\\x[0-9a-fA-F]{2}#'
+            => 'shell hex-escape literal (\\xNN — payload obfuscation)',
+        '#\\\\u[0-9a-fA-F]{4}#'
+            => 'shell unicode-escape literal (\\uNNNN — payload obfuscation)',
+        // eval interprets its argument as shell — opaque to anyone
+        // reading the cron line.
+        '#(?:^|[\s/;|&`$()=])eval\b#i'
+            => 'invokes eval (opaque shell-string execution)',
+        // openssl -d in any context (enc -d, base64 -d, ...) is a
+        // generic decoder.
+        '#\bopenssl\b[^\n]*\s-d\b#i'
+            => 'openssl with -d (decoder)',
     );
 
     $blockers = array();
