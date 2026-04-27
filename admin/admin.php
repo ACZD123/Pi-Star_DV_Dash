@@ -1,27 +1,41 @@
 <?php
 /**
- * Admin sidebar partial — service status grid + D-Star reflector
- * link/unlink form (when in dstarrepeater mode) + PiStar-Keeper
- * logbook panel.
+ * D-Star reflector link/unlink page — service status grid + a form
+ * that posts back to itself to issue
+ *   `sudo remotecontrold "<module>" link never "<reflector>"`
+ * (or `unlink`) against the running ircDDBGateway.
  *
- * Loaded inline by /admin/index.php (which is a symlink to the
- * top-level index.php — same source, different URL roots). The
- * service-status row pgreps for the six daemons (DStarRepeater,
+ * Hit directly via /admin/admin.php (the form action self-posts);
+ * not inline-included by any current parent page. The historical
+ * "Loaded inline by /admin/index.php" docstring claim was stale —
+ * there is no `include 'admin.php'` site in the codebase today.
+ * Reachable only by direct navigation; admin/configure.php
+ * configures the *password* for the same `remotecontrold` daemon
+ * but doesn't issue link/unlink commands.
+ *
+ * Service-status row pgreps for the six daemons (DStarRepeater,
  * MMDVMHost, ircDDBgateway, timeserver, pistar-watchdog,
  * pistar-keeper) and renders a green/red dot per service.
  *
- * D-Star reflector linker (POST handler further down): inputs are
- * validated by preg_match whitelist (`[^A-Z]`, `[^A-Z0-9 ]` etc.)
- * before being interpolated into a `sudo remotecontrold "<module>"
- * link|unlink "<reflector>"` command. The validation is the only
- * barrier to command injection; any change here should re-verify it.
- *
- * NOTE for the security pass: this file does not call
- * setEmbeddableSecurityHeaders(). Coverage gap.
+ * Input validation: preg_match whitelist on Module / RefName /
+ * Letter / Link verb (uppercase A-Z and digits only). That guards
+ * against shell-quote escape but does not substitute for CSRF —
+ * a forged POST with valid-looking values could otherwise trigger
+ * link/unlink under the operator's basic-auth session. csrf_verify()
+ * below closes that gap before any sudo runs.
  */
 
 require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
+require_once($_SERVER['DOCUMENT_ROOT'] . '/config/csrf.php');
 setSecurityHeaders();
+
+// CSRF protection — see config/csrf.php for the full rationale.
+// Must run BEFORE any output: bootstraps the session on GET (so
+// Set-Cookie ships and csrf_field() at line ~98 has a token to
+// emit) and rejects forged POSTs cleanly with 403 before the
+// `sudo remotecontrold "<module>" link|unlink ...` state-change
+// in the POST handler runs.
+csrf_verify();
 
 ?>
 <b>Service Status</b>
