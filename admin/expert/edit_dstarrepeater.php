@@ -52,6 +52,7 @@ require_once('../config/version.php');
     <link rel="stylesheet" type="text/css" href="../css/pistar-css.php" />
   </head>
   <body>
+  <?php pistar_warnings_render(); ?>
   <div class="container">
   <?php include './header-menu.inc'; ?>
   <div class="contentwide">

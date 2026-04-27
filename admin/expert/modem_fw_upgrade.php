@@ -151,6 +151,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/modem_fw_upgrade.php") {
     </script>
   </head>
   <body>
+  <?php pistar_warnings_render(); ?>
   <div class="container">
   <?php include './header-menu.inc'; ?>
   <div class="contentwide">

@@ -87,6 +87,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/ssh_access.php") {
     <script type="text/javascript" src="/jquery-timing.min.js"></script>
   </head>
   <body>
+  <?php pistar_warnings_render(); ?>
   <div class="container">
   <?php include './header-menu.inc'; ?>
   <div class="contentwide">

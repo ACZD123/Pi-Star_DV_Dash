@@ -134,6 +134,7 @@ function formatSize( $bytes )
     </style>
   </head>
   <body>
+  <?php pistar_warnings_render(); ?>
   <div class="container">
   <div class="header">
   <div style="font-size: 8px; text-align: right; padding-right: 8px;">Pi-Star:<?php echo $configPistarRelease['Pi-Star']['Version']?> / Dashboard:<?php echo $version; ?></div>

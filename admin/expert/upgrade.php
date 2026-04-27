@@ -119,6 +119,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/upgrade.php") {
 <?php } ?>
   </head>
   <body>
+  <?php pistar_warnings_render(); ?>
   <div class="container">
   <?php include './header-menu.inc'; ?>
   <div class="contentwide">

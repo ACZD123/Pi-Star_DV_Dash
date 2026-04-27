@@ -66,6 +66,10 @@ echo '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
 <title>Pi-Star - Digital Voice Dashboard - WiFi Config</title>
 </head>
 <body>'."\n";
+// Site-wide warning banners (default-password, Pi-Star upgrade nudges,
+// DMR loop risk, BM API v1, etc.). Conditional logic lives in
+// config/banner_warnings.inc.
+pistar_warnings_render();
 switch($page) {
     case "wlan0_info":
         //Declare a pile of variables

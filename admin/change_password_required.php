@@ -136,8 +136,8 @@ if (!empty($_POST['adminPassword'])) {
 <title>Pi-Star — Change Default Password</title>
 </head>
 <body>
-<div class="container">
 <?php pistar_warnings_render(); ?>
+<div class="container">
 <div class="header">
   <h1>Pi-Star — Default Password Change Required</h1>
 </div>

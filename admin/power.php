@@ -64,6 +64,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/power.php") {
     <link rel="stylesheet" type="text/css" href="css/pistar-css.php" />
   </head>
   <body>
+  <?php pistar_warnings_render(); ?>
   <div class="container">
   <div class="header">
   <div style="font-size: 8px; text-align: right; padding-right: 8px;">Pi-Star:<?php echo $configPistarRelease['Pi-Star']['Version']?> / <?php echo $lang['dashboard'].": ".$version; ?></div>

@@ -135,6 +135,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/update.php") {
 <?php } ?>
   </head>
   <body>
+  <?php pistar_warnings_render(); ?>
   <div class="container">
     <header aria-label="header">
       <div class="header">

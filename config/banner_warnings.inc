@@ -283,6 +283,27 @@ function pistar_warnings_enforce_redirect()
     if ($self === '/admin/change_password_required.php') {
         return;
     }
+    // Long-running operational tools — let the operator finish what
+    // they're doing. The Layer-1 banner still appears at the top of
+    // these pages so the warning isn't suppressed; only the redirect
+    // is. update.php and expert/upgrade.php both poll a `?ajax`
+    // log-tail every 1 s; redirecting on those polls causes jQuery
+    // to follow the 302 and append the full change-password HTML
+    // into the page's #tail div, "flooding" the operator with copies
+    // of the change-password form.
+    if ($self === '/admin/update.php'
+            || $self === '/admin/expert/upgrade.php') {
+        return;
+    }
+    // Defence in depth: any GET that includes ?ajax skips the redirect.
+    // Catches AJAX log-tail / status-poll endpoints elsewhere in the
+    // dashboard (live_modem_log.php, expert/jitter_test.php, etc.) so
+    // a future poll-style page can't accidentally regress the same way.
+    // The initial GET that loaded the parent page already carried the
+    // banner — defaulting AJAX to "no redirect" is safe.
+    if (isset($_GET['ajax'])) {
+        return;
+    }
     if (!file_exists('/etc/dstar-radio.mmdvmhost')
             && !file_exists('/etc/dstar-radio.dstarrepeater')) {
         return;

@@ -76,6 +76,7 @@ require_once('../config/version.php');
     </script>
   </head>
   <body>
+  <?php pistar_warnings_render(); ?>
   <div class="container">
   <?php include './header-menu.inc'; ?>
   <div class="contentwide">
