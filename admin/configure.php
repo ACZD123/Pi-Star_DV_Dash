@@ -2567,12 +2567,24 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
     if (empty($_POST['confHostame']) != TRUE ) {
       $newHostnameLower = strtolower(preg_replace('/[^A-Za-z0-9\-]/', '', $_POST['confHostame']));
       $currHostname = exec('cat /etc/hostname');
-      $rollHostname = 'sudo sed -i "s/'.$currHostname.'/'.$newHostnameLower.'/" /etc/hostname';
-      $rollHosts = 'sudo sed -i "s/'.$currHostname.'/'.$newHostnameLower.'/" /etc/hosts';
-      $rollMotd = 'sudo sed -i "s/'.$currHostname.'/'.$newHostnameLower.'/" /etc/motd';
-      system($rollHostname);
-      system($rollHosts);
-      system($rollMotd);
+      // Defence-in-depth on the read side: /etc/hostname is normally
+      // a clean RFC-1123 hostname (operator-set via this same form,
+      // which validates against [A-Za-z0-9-]+), but root-via-SSH could
+      // have written anything. Strip everything outside the safe
+      // charset before letting the value reach a shell context — and
+      // wrap the whole sed expression with escapeshellarg so even a
+      // future regression that lets a metachar through can't escape
+      // the argument. Switching the sed delimiter from `/` to `|`
+      // means a stray `/` in either value can't terminate the s///
+      // pattern (also impossible after the [A-Za-z0-9-] sanitisation).
+      $currHostnameSafe = preg_replace('/[^A-Za-z0-9\-]/', '', (string)$currHostname);
+      if ($newHostnameLower !== '' && $currHostnameSafe !== ''
+              && $newHostnameLower !== $currHostnameSafe) {
+          $sedExpr = 's|' . $currHostnameSafe . '|' . $newHostnameLower . '|';
+          system('sudo sed -i ' . escapeshellarg($sedExpr) . ' /etc/hostname');
+          system('sudo sed -i ' . escapeshellarg($sedExpr) . ' /etc/hosts');
+          system('sudo sed -i ' . escapeshellarg($sedExpr) . ' /etc/motd');
+      }
       if (file_exists('/etc/hostapd/hostapd.conf')) {
           // Update the Hotspot name to the Hostname. hostapd.conf
           // moved to the privileged-flat allowlist (#15 hardening —
