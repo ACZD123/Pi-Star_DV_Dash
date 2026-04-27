@@ -9,17 +9,14 @@
  *   2. StarNet groups — included via active_starnet_groups.php only when
  *      `starNetCallsign1`..`5` are configured in /etc/ircddbgateway.
  *
- * No security_headers call here — it's a sub-partial; the parent page
- * (index.php / last_herd.php / etc.) is responsible for headers.
- *
- * NOTE for the security pass: this file should call
- * setEmbeddableSecurityHeaders() at the top — flagged in the wider
- * audit as a coverage gap.
+ * AJAX-loaded partial — embeddable variant only. Omits the
+ * X-Frame-Options / frame-ancestors directives the parent already
+ * asserts; they apply to iframe ancestry, not XHR responses.
  */
 
 
 require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
-setSecurityHeaders();
+setEmbeddableSecurityHeaders();
 
 include_once $_SERVER['DOCUMENT_ROOT'].'/config/ircddblocal.php';
 $configs = array();

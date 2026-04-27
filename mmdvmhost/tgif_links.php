@@ -19,13 +19,18 @@
  *
  * Display-only. The companion tgif_manager.php provides the link form.
  *
- * NOTE for the security pass: API call is plain HTTP; no
- * setEmbeddableSecurityHeaders() in this file.
+ * AJAX-loaded partial — embeddable variant only. Omits the
+ * X-Frame-Options / frame-ancestors directives the parent already
+ * asserts; they apply to iframe ancestry, not XHR responses.
+ *
+ * NOTE: the upstream TGIF /api/sessions endpoint is plain HTTP, not
+ * HTTPS. Tracked separately as L-8 in the security backlog — not
+ * fixed by this header change.
  */
 
 
 require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
-setSecurityHeaders();
+setEmbeddableSecurityHeaders();
 
 include_once $_SERVER['DOCUMENT_ROOT'].'/config/config.php';          // MMDVMDash Config
 include_once $_SERVER['DOCUMENT_ROOT'].'/mmdvmhost/tools.php';        // MMDVMDash Tools

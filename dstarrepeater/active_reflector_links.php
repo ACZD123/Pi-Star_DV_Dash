@@ -16,13 +16,15 @@
  * comments next to each preg_match_all — preserve those samples
  * verbatim if Links.log format ever drifts.
  *
- * No security_headers call — it's a sub-partial; flagged for the
- * security pass.
+ * AJAX-loaded partial — embeddable variant only. Omits the
+ * X-Frame-Options / frame-ancestors directives that the parent
+ * /index.php already asserts; they apply to iframe ancestry, not
+ * to XHR responses, so emitting them here is just dead bytes.
  */
 
 
 require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
-setSecurityHeaders();
+setEmbeddableSecurityHeaders();
 
 include_once $_SERVER['DOCUMENT_ROOT'].'/config/ircddblocal.php';
 include_once $_SERVER['DOCUMENT_ROOT'].'/config/language.php';          // Translation Code

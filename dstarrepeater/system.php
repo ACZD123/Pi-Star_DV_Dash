@@ -9,17 +9,19 @@
  * DStarRepeater modes (same partial, gated by /index.php).
  *
  * Served two ways from /index.php: an inline `include` for the initial
- * page render, then AJAX `$("#sysInfo").load(...)` for refreshes. The
- * AJAX path makes this a direct HTTP target, so the setSecurityHeaders()
- * call below applies headers in their own right (the headers_sent()
- * guard inside makes the call idempotent on the include path too).
+ * page render, then AJAX `$("#sysInfo").load(...)` for refreshes. On
+ * the inline path the parent has already emitted full security headers
+ * (and the headers_sent() guard inside makes our call idempotent); on
+ * the AJAX path the response is XHR — X-Frame-Options / frame-ancestors
+ * apply to iframe ancestry, not XHR, so the embeddable variant is the
+ * correct choice in both directions.
  *
  * Reads /etc/ircddbgateway (flat key=value via the hand-rolled parser)
  * to surface the gateway callsign in the hardware-info table.
  */
 
 require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
-setSecurityHeaders();
+setEmbeddableSecurityHeaders();
 
 include_once $_SERVER['DOCUMENT_ROOT'].'/config/ircddblocal.php';
 include_once $_SERVER['DOCUMENT_ROOT'].'/config/language.php';          // Translation Code

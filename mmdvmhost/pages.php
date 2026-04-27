@@ -20,10 +20,13 @@
  */
 
 
+// AJAX-loaded partial — embeddable variant only. The earlier
+// duplicate setSecurityHeaders() call has been removed; that
+// non-embeddable variant raced with this one and won via the
+// headers_sent() guard, so the file was effectively shipping
+// X-Frame-Options / frame-ancestors despite the embeddable
+// version being added below it.
 require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
-setSecurityHeaders();
-
-require_once($_SERVER['DOCUMENT_ROOT'].'/config/security_headers.php');
 setEmbeddableSecurityHeaders();
 
 include_once $_SERVER['DOCUMENT_ROOT'].'/config/config.php';          // MMDVMDash Config

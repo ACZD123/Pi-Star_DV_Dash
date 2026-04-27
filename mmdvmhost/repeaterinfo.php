@@ -29,8 +29,11 @@
  * chain.
  */
 
+// AJAX-loaded partial (1 s polling cadence) — embeddable variant
+// only. Omits the X-Frame-Options / frame-ancestors directives the
+// parent already asserts; they apply to iframe ancestry, not XHR.
 require_once($_SERVER['DOCUMENT_ROOT'] . '/config/security_headers.php');
-setSecurityHeaders();
+setEmbeddableSecurityHeaders();
 
 include_once $_SERVER['DOCUMENT_ROOT'].'/config/config.php';          // MMDVMDash Config
 include_once $_SERVER['DOCUMENT_ROOT'].'/mmdvmhost/tools.php';        // MMDVMDash Tools
