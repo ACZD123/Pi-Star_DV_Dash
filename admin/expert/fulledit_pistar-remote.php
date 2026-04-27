@@ -94,7 +94,7 @@ fclose($fh);
 ?>
 <form name="test" method="post" action="">
 <?php csrf_field(); ?>
-<textarea name="data" cols="80" rows="45"><?php echo $theData; ?></textarea><br />
+<textarea name="data" cols="80" rows="45"><?php echo htmlspecialchars((string)$theData, ENT_QUOTES, 'UTF-8'); ?></textarea><br />
 <input type="submit" name="submit" value="<?php echo $lang['apply']; ?>" />
 </form>
 

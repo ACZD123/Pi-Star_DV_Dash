@@ -125,21 +125,28 @@ $parsed_ini = parse_ini_file($filepath, true);
 echo '<form action="" method="post">'."\n";
 echo csrf_field_html()."\n";
     foreach($parsed_ini as $section=>$values) {
+        // Same hardening as edit_mmdvmhost.php (#23): escape every INI
+        // section / key / value before HTML interpolation. The save
+        // handler writes POST bytes verbatim so legitimate values
+        // (including any with `"` or `<`) round-trip byte-identically.
+        $sectionHtml = htmlspecialchars((string)$section, ENT_QUOTES, 'UTF-8');
         // keep the section as hidden text so we can update once the form submitted
-        echo "<input type=\"hidden\" value=\"$section\" name=\"$section\" />\n";
+        echo "<input type=\"hidden\" value=\"$sectionHtml\" name=\"$sectionHtml\" />\n";
         echo "<table>\n";
-        echo "<tr><th colspan=\"2\">$section</th></tr>\n";
+        echo "<tr><th colspan=\"2\">$sectionHtml</th></tr>\n";
         // print all other values as input fields, so can edit.
         // note the name='' attribute it has both section and key
         foreach($values as $key=>$value) {
+            $keyHtml   = htmlspecialchars((string)$key, ENT_QUOTES, 'UTF-8');
+            $valueHtml = htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
             if (($key == "Options") || ($value)) {
-                echo "<tr><td align=\"right\" width=\"30%\">$key</td><td align=\"left\"><input type=\"text\" name=\"{$section}[$key]\" value=\"$value\" /></td></tr>\n";
+                echo "<tr><td align=\"right\" width=\"30%\">$keyHtml</td><td align=\"left\"><input type=\"text\" name=\"{$sectionHtml}[$keyHtml]\" value=\"$valueHtml\" /></td></tr>\n";
             }
             elseif (($key == "Display") && ($value == '')) {
-                echo "<tr><td align=\"right\" width=\"30%\">$key</td><td align=\"left\"><input type=\"text\" name=\"{$section}[$key]\" value=\"None\" /></td></tr>\n";
+                echo "<tr><td align=\"right\" width=\"30%\">$keyHtml</td><td align=\"left\"><input type=\"text\" name=\"{$sectionHtml}[$keyHtml]\" value=\"None\" /></td></tr>\n";
             }
             else {
-                echo "<tr><td align=\"right\" width=\"30%\">$key</td><td align=\"left\"><input type=\"text\" name=\"{$section}[$key]\" value=\"0\" /></td></tr>\n";
+                echo "<tr><td align=\"right\" width=\"30%\">$keyHtml</td><td align=\"left\"><input type=\"text\" name=\"{$sectionHtml}[$keyHtml]\" value=\"0\" /></td></tr>\n";
             }
         }
         echo "</table>\n";
