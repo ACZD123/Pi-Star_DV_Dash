@@ -196,6 +196,60 @@ function csrf_session_start()
             @ini_set('session.gc_probability', '1');
             @ini_set('session.gc_divisor', '1');
         }
+        // Pi-Star's /var/lib/php/sessions tmpfs is sized 64 KB (per
+        // /etc/fstab in the OS image) — about 15 session files at
+        // a 4 KB tmpfs block each. csrf.php is only loaded behind
+        // basic auth on /admin/*, so the only session-creators are
+        // authenticated operators (whose browsers reuse one cookie =
+        // one session) and tooling that hits the dashboard with
+        // fresh cookie jars per request. The latter has filled the
+        // tmpfs in practice; once full, session_start() fails with
+        // "No space left on device" and CSRF silently breaks for
+        // the operator — they get a 403 on the next form submit
+        // because $_SESSION['csrf_token'] could not be persisted.
+        //
+        // Lower gc_maxlifetime to 600 s (10 min) so the next request
+        // after a stale-session pile-up sweeps the directory clear.
+        // gc_probability=1/1 above means GC runs on every
+        // session_start(), so recovery is at most one request away
+        // once the 10 min window has passed. Trade-off: an operator
+        // idle >10 min gets a 403 on form submit, but a page reload
+        // (basic-auth + cookie still held by the browser) re-issues
+        // a fresh CSRF token immediately. AJAX-polling pages
+        // (update.php, live_modem_log.php, calibration.php) keep
+        // their session mtime fresh on every poll, so GC never
+        // sees them as expired.
+        @ini_set('session.gc_maxlifetime', '600');
+        // Belt-and-braces safety net: cap the session directory at
+        // 12 files BEFORE session_start() tries to write a new one.
+        // gc_maxlifetime above only deletes sessions older than
+        // 600 s — a burst of fresh-cookie requests (all <600 s old)
+        // can still fill the 64 KB tmpfs and surface as
+        // "No space left on device". This pre-emptive prune deletes
+        // the oldest sess_* files until 12 remain, leaving 3 slots
+        // of headroom under the ~15-file tmpfs cap.
+        //
+        // Best-effort: any failure here (permissions, missing dir,
+        // glob/unlink errors) is silently ignored — session_start()
+        // will still try and either succeed or fall through to the
+        // existing failure-logging path below. Worst case for an
+        // evicted session is an operator gets a 403 on the next
+        // form submit and a page reload re-issues a token, which
+        // is the same UX as gc_maxlifetime expiry and far better
+        // than the disk-full failure this guards against.
+        $sessSaveDir = (string)@ini_get('session.save_path');
+        if ($sessSaveDir !== '') {
+            $sessFiles = @glob($sessSaveDir . '/sess_*');
+            if (is_array($sessFiles) && count($sessFiles) > 12) {
+                usort($sessFiles, function ($a, $b) {
+                    return (int)@filemtime($a) - (int)@filemtime($b);
+                });
+                $sessExcess = count($sessFiles) - 12;
+                for ($i = 0; $i < $sessExcess; $i++) {
+                    @unlink($sessFiles[$i]);
+                }
+            }
+        }
         // Harden the PHPSESSID cookie flags BEFORE session_start()
         // emits the Set-Cookie header. See _csrf_set_cookie_params()
         // for the per-flag rationale.
@@ -332,4 +386,16 @@ function csrf_verify()
            . '</body></html>';
         exit;
     }
+
+    // Token verified — strip it from $_POST so downstream handlers
+    // that iterate $_POST (e.g. fulledit_bmapikey.php and
+    // fulledit_dapnetapi.php's INI writers, which treat each top-
+    // level POST key as an [INI section]) don't accidentally write
+    // a stray `[csrf token]` block into /etc/<file>. Without this,
+    // every successful submit on those editors prepended an empty
+    // `[csrf token]` section to the saved config and rendered a
+    // ghost table titled "csrf_token" on the response page.
+    // Centralising the unset here means every current and future
+    // POST handler is immune without needing to remember the dance.
+    unset($_POST['csrf_token']);
 }
