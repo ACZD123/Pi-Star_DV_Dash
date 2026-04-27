@@ -105,7 +105,9 @@ if ($_SERVER["PHP_SELF"] == "/admin/calibration.php") {
                       'TXOffset=' . $offset,
                       $mmdvmContent
                   );
-                  $stage = '/tmp/pistar-calib-mmdvmhost.tmp';
+                  // A3-3: per-request random staging path defeats
+                  // predictable-name pre-create / symlink attacks.
+                  $stage = tempnam('/tmp', 'pistar-calib-');
                   file_put_contents($stage, $mmdvmContent);
 
                   // Atomic install (B5/L-5 pattern). Re-seal the rootfs

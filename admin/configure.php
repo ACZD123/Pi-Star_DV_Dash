@@ -1200,7 +1200,8 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
                 '',
                 $irccContent
             );
-            $stage = '/tmp/pistar-cfg-ircddb-aprs.tmp';
+            // A3-3: per-request random staging.
+            $stage = tempnam('/tmp', 'pistar-cfg-');
             file_put_contents($stage, $irccContent);
             system('sudo install -m 644 -o root -g root '
                  . escapeshellarg($stage) . ' /etc/ircddbgateway');
@@ -2890,7 +2891,8 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
                 $irccContent,
                 1
             );
-            $stage = '/tmp/pistar-cfg-ircddb-en2.tmp';
+            // A3-3: per-request random staging.
+            $stage = tempnam('/tmp', 'pistar-cfg-');
             file_put_contents($stage, $irccContent);
             system('sudo install -m 644 -o root -g root '
                  . escapeshellarg($stage) . ' /etc/ircddbgateway');
