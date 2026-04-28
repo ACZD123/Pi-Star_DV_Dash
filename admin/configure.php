@@ -199,15 +199,23 @@ if (file_exists('/etc/aprsgateway')) {
 $dmrGatewayConfigFile = '/etc/dmrgateway';
 if (fopen($dmrGatewayConfigFile,'r')) { $configdmrgateway = parse_ini_file($dmrGatewayConfigFile, true); }
 
-// Load the modem config information
-if (file_exists('/etc/dstar-radio.dstarrepeater')) {
-    $modemConfigFileDStarRepeater = '/etc/dstar-radio.dstarrepeater';
-    if (fopen($modemConfigFileDStarRepeater,'r')) { $configModem = parse_ini_file($modemConfigFileDStarRepeater, true); }
+// Load the modem config information.
+//
+// Path constants are unconditional — they are just literal destinations
+// the modem-config writer below targets. They USED to be set inside the
+// file_exists() guard, which broke first-time setup and mode switches:
+// when the marker file did not yet exist at the top of the script, the
+// path variable stayed undefined, and by the time the writer ran the
+// freshly-touched (empty) marker was already in place but the install
+// command silently no-op'd against an empty path. The marker would be
+// left at 0 bytes.
+$modemConfigFileDStarRepeater = '/etc/dstar-radio.dstarrepeater';
+$modemConfigFileMMDVMHost     = '/etc/dstar-radio.mmdvmhost';
+if (file_exists($modemConfigFileDStarRepeater)) {
+    $configModem = parse_ini_file($modemConfigFileDStarRepeater, true);
 }
-
-if (file_exists('/etc/dstar-radio.mmdvmhost')) {
-    $modemConfigFileMMDVMHost = '/etc/dstar-radio.mmdvmhost';
-    if (fopen($modemConfigFileMMDVMHost,'r')) { $configModem = parse_ini_file($modemConfigFileMMDVMHost, true); }
+if (file_exists($modemConfigFileMMDVMHost)) {
+    $configModem = parse_ini_file($modemConfigFileMMDVMHost, true);
 }
 
 function aprspass ($callsign)
@@ -2841,11 +2849,21 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
     }
     if (isset($configmmdvm['NextionDriver'])) {
         if ($configmmdvm['Nextion']['Port'] == $configmmdvm['Modem']['Port']) { $configmmdvm['Nextion']['Port'] = "/dev/ttyNextionDriver"; }
-        if ($configmmdvm['Nextion']['Port'] == $configmmdvm['Modem']['UARTPort']) { $configmmdvm['Nextion']['Port'] = "/dev/ttyNextionDriver"; }
+        // UARTPort is written only by the hardware-specific handlers
+        // earlier in this file (~line 1802 onward) and is absent on
+        // any save that does not include modem-hardware POST fields.
+        // Without the isset() guard PHP 8.2 logs an "Undefined array
+        // key" warning on every non-modem save.
+        if (isset($configmmdvm['Modem']['UARTPort']) && $configmmdvm['Nextion']['Port'] == $configmmdvm['Modem']['UARTPort']) { $configmmdvm['Nextion']['Port'] = "/dev/ttyNextionDriver"; }
     }
     if (!isset($configmmdvm['FM'])) {
         $configmmdvm['FM']['Enable'] = "0";
-        $configmmdvm['FM']['Callsign'] = $newCallsignUpper;
+        // $newCallsignUpper is only assigned inside the confCallsign
+        // POST handlers (~lines 1020/1130/1145), so on a save that
+        // does not include the callsign field this would have been
+        // an undefined-variable read. Fall back to the dashboard's
+        // current General/Callsign value if available, then empty.
+        $configmmdvm['FM']['Callsign'] = $newCallsignUpper ?? ($configmmdvm['General']['Callsign'] ?? '');
         $configmmdvm['FM']['CallsignSpeed'] = "20";
         $configmmdvm['FM']['CallsignFrequency'] = "1000";
         $configmmdvm['FM']['CallsignTime'] = "10";
@@ -3789,19 +3807,19 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
             // ~line 3773 and the cfg installer ~line 3806). escapeshellarg
             // both args defence-in-depth even though both are
             // hardcoded literals.
+            // file_exists() is the only gate we need — the marker is
+            // mode 644 root:root after the touch at line 642, so an
+            // additional fopen()-as-readability-check leaked a handle
+            // for nothing.
             if (file_exists('/etc/dstar-radio.dstarrepeater')) {
-                        if (fopen($modemConfigFileDStarRepeater,'r')) {
-                            system('sudo install -m 644 -o root -g root '
-                                 . escapeshellarg('/tmp/sja7hFRkw4euG7.tmp') . ' '
-                                 . escapeshellarg($modemConfigFileDStarRepeater));
-                        }
+                system('sudo install -m 644 -o root -g root '
+                     . escapeshellarg('/tmp/sja7hFRkw4euG7.tmp') . ' '
+                     . escapeshellarg($modemConfigFileDStarRepeater));
             }
             if (file_exists('/etc/dstar-radio.mmdvmhost')) {
-                        if (fopen($modemConfigFileMMDVMHost,'r')) {
-                            system('sudo install -m 644 -o root -g root '
-                                 . escapeshellarg('/tmp/sja7hFRkw4euG7.tmp') . ' '
-                                 . escapeshellarg($modemConfigFileMMDVMHost));
-                        }
+                system('sudo install -m 644 -o root -g root '
+                     . escapeshellarg('/tmp/sja7hFRkw4euG7.tmp') . ' '
+                     . escapeshellarg($modemConfigFileMMDVMHost));
             }
             }
     }
@@ -5569,7 +5587,16 @@ $p25Hosts = fopen("/usr/local/etc/P25Hosts.txt", "r");
     <tr>
     <td align="left"><a class="tooltip2" href="#"><?php echo $lang['fw_dash'];?>:<span><b>Dashboard Access</b>Do you want the dashboard access to be publicly available? This modifies the uPNP firewall configuration.</span></a></td>
     <?php
-    $testPrvPubDash = exec('sudo grep "80 80" /usr/local/sbin/pistar-upnp.service | cut -c 1');
+    // pistar-upnp.service is world-readable (mode 755), so plain `grep`
+    // is enough to read the current state. The previous `sudo grep`
+    // here required a sudoers entry that the tightened
+    // /etc/sudoers.d/pistar-dashboard does not grant — sudo would
+    // reject the command, exec() returned an empty string, the
+    // first-char compare against '#' failed, and the form defaulted
+    // to the Public radio regardless of the actual state. A user who
+    // submitted the form without flipping the radio then ended up
+    // forcing Public on a previously-Private device.
+    $testPrvPubDash = exec('grep "80 80" /usr/local/sbin/pistar-upnp.service | cut -c 1');
     if (substr($testPrvPubDash, 0, 1) === '#') {
         echo "   <td align=\"left\" colspan=\"2\"><input type=\"radio\" name=\"dashAccess\" value=\"PRV\" checked=\"checked\" />Private <input type=\"radio\" name=\"dashAccess\" value=\"PUB\" />Public</td>\n";
         }
@@ -5581,7 +5608,10 @@ $p25Hosts = fopen("/usr/local/etc/P25Hosts.txt", "r");
     <tr>
     <td align="left"><a class="tooltip2" href="#"><?php echo $lang['fw_irc'];?>:<span><b>ircDDBGateway Remote</b>Do you want the ircDDBGateway remote control access to be publicly available? This modifies the uPNP firewall Configuration.</span></a></td>
     <?php
-    $testPrvPubIRC = exec('sudo grep "10022 10022" /usr/local/sbin/pistar-upnp.service | cut -c 1');
+    // See dashAccess block above — sudo not required to read this
+    // world-readable file, and using sudo here was masking the real
+    // state and silently flipping users to Public.
+    $testPrvPubIRC = exec('grep "10022 10022" /usr/local/sbin/pistar-upnp.service | cut -c 1');
     if (substr($testPrvPubIRC, 0, 1) === '#') {
         echo "   <td align=\"left\" colspan=\"2\"><input type=\"radio\" name=\"ircRCAccess\" value=\"PRV\" checked=\"checked\" />Private <input type=\"radio\" name=\"ircRCAccess\" value=\"PUB\" />Public</td>\n";
         }
@@ -5593,7 +5623,9 @@ $p25Hosts = fopen("/usr/local/etc/P25Hosts.txt", "r");
     <tr>
     <td align="left"><a class="tooltip2" href="#"><?php echo $lang['fw_ssh'];?>:<span><b>SSH Access</b>Do you want access to be publicly available over SSH (used for support issues)? This modifies the uPNP firewall Configuration.</span></a></td>
     <?php
-    $testPrvPubSSH = exec('sudo grep "22 22" /usr/local/sbin/pistar-upnp.service | cut -c 1');
+    // See dashAccess block above — same sudo-not-needed / silently-
+    // forcing-Public class of bug, fixed the same way.
+    $testPrvPubSSH = exec('grep "22 22" /usr/local/sbin/pistar-upnp.service | cut -c 1');
     if (substr($testPrvPubSSH, 0, 1) === '#') {
         echo "   <td align=\"left\" colspan=\"2\"><input type=\"radio\" name=\"sshAccess\" value=\"PRV\" checked=\"checked\" />Private <input type=\"radio\" name=\"sshAccess\" value=\"PUB\" />Public</td>\n";
         }

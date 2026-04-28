@@ -411,8 +411,12 @@ if ($_SERVER["PHP_SELF"] == "/admin/config_backup.php") {
 
           // Tear down stale dstar-radio.* markers first — only one of
           // the two can be in use, and the restored archive may carry
-          // a different mode than the device currently has.
-          shell_exec('sudo rm -f /etc/dstar-radio.* 2>&1');
+          // a different mode than the device currently has. Use
+          // `rm -rf` (not `rm -f`) so the call matches the
+          // PISTAR_DASH_MARKERS sudoers entry — different argv tokens
+          // yield different sudoers matches, and only `-rf` is
+          // allowlisted.
+          shell_exec('sudo rm -rf /etc/dstar-radio.* 2>&1');
 
           $installed = 0;
           foreach ($admit as $basename => $_idx) {

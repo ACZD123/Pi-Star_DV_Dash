@@ -45,7 +45,8 @@ pistar_warnings_enforce_redirect();
 
 include('wifi/phpincs.php');
 $output = $return = 0;
-$page = $_GET['page'];
+// PHP 8.2 emits an Undefined array key warning if `?page=` is absent.
+$page = $_GET['page'] ?? '';
 
 
 echo '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
