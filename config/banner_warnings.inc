@@ -20,9 +20,9 @@
  *
  * Banners managed here (consolidated from index.php and configure.php):
  *   1. Pi-Star outdated (<4.1 on RPi)                    yellow
- *   2. Upgrade available 4.1.0..<4.1.10                  yellow
- *   3. Upgrade available 4.2.0..<4.2.3                   yellow
- *   4. Upgrade available 4.3.0..<4.3.4                   yellow
+ *   2. Upgrade available 4.1.0..<4.1.13                  yellow
+ *   3. Upgrade available 4.2.0..<4.2.6                   yellow
+ *   4. Upgrade available 4.3.0..<4.3.7                   yellow
  *   5. DMR public mode without ACL (loop risk)           yellow
  *   6. BM API v1 key still in use                        red
  *   7. Default basic-auth password ('raspberry')         red
@@ -365,7 +365,7 @@ function pistar_warnings_render()
     }
     if ($version !== ''
             && version_compare($version, '4.1.0', '>=')
-            && version_compare($version, '4.1.11', '<')) {
+            && version_compare($version, '4.1.13', '<')) {
         _pistar_banner_emit(
             'Alert: An upgrade to Pi-Star has been released, click here to upgrade now: '
             . '<a href="/admin/expert/upgrade.php" alt="Upgrade Pi-Star">Upgrade Pi-Star</a>.',
@@ -374,7 +374,7 @@ function pistar_warnings_render()
     }
     if ($version !== ''
             && version_compare($version, '4.2.0', '>=')
-            && version_compare($version, '4.2.4', '<')) {
+            && version_compare($version, '4.2.6', '<')) {
         _pistar_banner_emit(
             'Alert: An upgrade to Pi-Star has been released, click here to upgrade now: '
             . '<a href="/admin/expert/upgrade.php" alt="Upgrade Pi-Star">Upgrade Pi-Star</a>.',
@@ -383,7 +383,7 @@ function pistar_warnings_render()
     }
     if ($version !== ''
             && version_compare($version, '4.3.0', '>=')
-            && version_compare($version, '4.3.5', '<')) {
+            && version_compare($version, '4.3.7', '<')) {
         _pistar_banner_emit(
             'Alert: An upgrade to Pi-Star has been released, click here to upgrade now: '
             . '<a href="/admin/expert/upgrade.php" alt="Upgrade Pi-Star">Upgrade Pi-Star</a>.',
