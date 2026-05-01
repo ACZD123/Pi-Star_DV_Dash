@@ -65,42 +65,61 @@ require_once($_SERVER['DOCUMENT_ROOT'].'/config/config_writer.php');
  *   - /root/.Remote Control          (linker password secret)
  *   - /etc/sudoers* / /etc/passwd    (system auth)
  *
- * @return array<string,string>
+ * @return array<string, array{0:string, 1:int, 2:string, 3:string}>
+ *         basename => [path, mode, owner, group]
  */
 function backup_files()
 {
+    // Each entry is [path, mode, owner, group]. The mode/owner/group
+    // tuple is what the restore loop passes to `sudo install -m -o
+    // -g`, and MUST match the corresponding /etc/sudoers.d/pistar-
+    // dashboard PISTAR_DASH_INSTALL line for that destination — or
+    // sudo will reject the install and the file will silently fail
+    // to restore. Pre-2026-05-01 the restore loop used a hardcoded
+    // `install -m 644 -o root -g root` for every entry, which
+    // worked under the old NOPASSWD: ALL sudoers but breaks under
+    // the path-scoped allowlist for: the .key files (require 600
+    // www-data:www-data so the dashboard's per-page sudo-less
+    // parse_ini_file() reads still work — see fulledit_bmapikey.php
+    // for the full rationale), wpa_supplicant.conf (600 root:root),
+    // and the three system files (dhcpcd.conf, hosts, hostname)
+    // which have no install entry in the deployed sudoers at all
+    // and rely on a re-spun image to gain them.
     return array(
         // Network / WiFi
-        'dhcpcd.conf'                 => '/etc/dhcpcd.conf',
-        'wpa_supplicant.conf'         => '/etc/wpa_supplicant/wpa_supplicant.conf',
+        'dhcpcd.conf'                 => array('/etc/dhcpcd.conf',                            644, 'root',     'root'),
+        'wpa_supplicant.conf'         => array('/etc/wpa_supplicant/wpa_supplicant.conf',     600, 'root',     'root'),
         // Gateway daemon configs (flat key=value INI-ish)
-        'ircddbgateway'               => '/etc/ircddbgateway',
-        'mmdvmhost'                   => '/etc/mmdvmhost',
-        'dstarrepeater'               => '/etc/dstarrepeater',
-        'dapnetgateway'               => '/etc/dapnetgateway',
-        'p25gateway'                  => '/etc/p25gateway',
-        'm17gateway'                  => '/etc/m17gateway',
-        'ysfgateway'                  => '/etc/ysfgateway',
-        'ysf2dmr'                     => '/etc/ysf2dmr',
-        'dgidgateway'                 => '/etc/dgidgateway',
-        'nxdngateway'                 => '/etc/nxdngateway',
-        'dmrgateway'                  => '/etc/dmrgateway',
-        'mobilegps'                   => '/etc/mobilegps',
-        'starnetserver'               => '/etc/starnetserver',
-        'timeserver'                  => '/etc/timeserver',
+        'ircddbgateway'               => array('/etc/ircddbgateway',                          644, 'root',     'root'),
+        'mmdvmhost'                   => array('/etc/mmdvmhost',                              644, 'root',     'root'),
+        'dstarrepeater'               => array('/etc/dstarrepeater',                          644, 'root',     'root'),
+        'dapnetgateway'               => array('/etc/dapnetgateway',                          644, 'root',     'root'),
+        'p25gateway'                  => array('/etc/p25gateway',                             644, 'root',     'root'),
+        'm17gateway'                  => array('/etc/m17gateway',                             644, 'root',     'root'),
+        'ysfgateway'                  => array('/etc/ysfgateway',                             644, 'root',     'root'),
+        'ysf2dmr'                     => array('/etc/ysf2dmr',                                644, 'root',     'root'),
+        'dgidgateway'                 => array('/etc/dgidgateway',                            644, 'root',     'root'),
+        'nxdngateway'                 => array('/etc/nxdngateway',                            644, 'root',     'root'),
+        'dmrgateway'                  => array('/etc/dmrgateway',                             644, 'root',     'root'),
+        'mobilegps'                   => array('/etc/mobilegps',                              644, 'root',     'root'),
+        'starnetserver'               => array('/etc/starnetserver',                          644, 'root',     'root'),
+        'timeserver'                  => array('/etc/timeserver',                             644, 'root',     'root'),
         // Mode markers (operator has at most one of these)
-        'dstar-radio.mmdvmhost'       => '/etc/dstar-radio.mmdvmhost',
-        'dstar-radio.dstarrepeater'   => '/etc/dstar-radio.dstarrepeater',
+        'dstar-radio.mmdvmhost'       => array('/etc/dstar-radio.mmdvmhost',                  644, 'root',     'root'),
+        'dstar-radio.dstarrepeater'   => array('/etc/dstar-radio.dstarrepeater',              644, 'root',     'root'),
         // Pi-Star service / dashboard config
-        'pistar-remote'               => '/etc/pistar-remote',
-        'hosts'                       => '/etc/hosts',
-        'hostname'                    => '/etc/hostname',
-        'bmapi.key'                   => '/etc/bmapi.key',
-        'dapnetapi.key'               => '/etc/dapnetapi.key',
-        'pistar-css.ini'              => '/etc/pistar-css.ini',
-        'RSSI.dat'                    => '/usr/local/etc/RSSI.dat',
-        'ircddblocal.php'             => '/var/www/dashboard/config/ircddblocal.php',
-        'config.php'                  => '/var/www/dashboard/config/config.php',
+        'pistar-remote'               => array('/etc/pistar-remote',                          644, 'root',     'root'),
+        'hosts'                       => array('/etc/hosts',                                  644, 'root',     'root'),
+        'hostname'                    => array('/etc/hostname',                               644, 'root',     'root'),
+        // .key files: 600 www-data so unprivileged dashboard reads
+        // (banner_warnings.inc, bm_links.php, bm_manager.php — all
+        // parse_ini_file() without sudo) still work post-restore.
+        'bmapi.key'                   => array('/etc/bmapi.key',                              600, 'www-data', 'www-data'),
+        'dapnetapi.key'               => array('/etc/dapnetapi.key',                          600, 'www-data', 'www-data'),
+        'pistar-css.ini'              => array('/etc/pistar-css.ini',                         644, 'root',     'root'),
+        'RSSI.dat'                    => array('/usr/local/etc/RSSI.dat',                     644, 'root',     'root'),
+        'ircddblocal.php'             => array('/var/www/dashboard/config/ircddblocal.php',   644, 'root',     'root'),
+        'config.php'                  => array('/var/www/dashboard/config/config.php',        644, 'root',     'root'),
     );
 }
 
@@ -191,7 +210,11 @@ if ($_SERVER["PHP_SELF"] == "/admin/config_backup.php") {
           // missing source files are silently skipped (the cp returns
           // an error to stderr that nobody reads, same as the legacy
           // behaviour).
-          foreach (backup_files() as $basename => $srcpath) {
+          foreach (backup_files() as $basename => $meta) {
+              // $meta is [path, mode, owner, group]. The backup half
+              // only needs the path — mode/owner/group are consumed
+              // on the restore-half install command.
+              $srcpath = $meta[0];
               if ($basename === 'dhcpcd.conf') {
                   // Only back up dhcpcd.conf if the operator has set a
                   // static IP — otherwise restoring would clobber
@@ -420,15 +443,28 @@ if ($_SERVER["PHP_SELF"] == "/admin/config_backup.php") {
 
           $installed = 0;
           foreach ($admit as $basename => $_idx) {
-              $src    = $target_dir . '/' . $basename;
-              $target = $allowlist[$basename];
+              $src   = $target_dir . '/' . $basename;
+              $meta  = $allowlist[$basename];
+              $target = $meta[0];
+              $mode  = (string)$meta[1];
+              $owner = $meta[2];
+              $group = $meta[3];
               if (!file_exists($src)) {
                   // Should be impossible after a successful extractTo,
                   // but guard anyway — extraction can fail per-entry on
                   // unusual archives without throwing.
                   continue;
               }
-              $cmd = 'sudo install -m 644 -o root -g root '
+              // Per-file install args from backup_files() metadata —
+              // mode/owner/group must match the deployed sudoers
+              // PISTAR_DASH_INSTALL line for $target or sudo will
+              // reject. The hardcoded `install -m 644 -o root -g root`
+              // here used to silently fail on .key files (require
+              // 600 www-data:www-data) and wpa_supplicant.conf
+              // (600 root:root) under the path-scoped sudoers.
+              $cmd = 'sudo install -m ' . $mode
+                   . ' -o ' . escapeshellarg($owner)
+                   . ' -g ' . escapeshellarg($group) . ' '
                    . escapeshellarg($src) . ' '
                    . escapeshellarg($target);
               $rc = 0; $cmd_out = array();
