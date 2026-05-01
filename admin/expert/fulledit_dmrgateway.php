@@ -68,10 +68,12 @@ if(isset($_POST['data'])) {
         $fh = fopen($filepath, 'w');
         fwrite($fh, $_POST['data']);
         fclose($fh);
+        // L-5: atomic install replaces the prior cp + chmod + chown
+        // triplet (rejected by the tightened sudoers — see
+        // edit_mmdvmhost.php for the full rationale).
         exec('sudo mount -o remount,rw /');
-        exec('sudo cp ' . escapeshellarg($filepath) . ' /etc/dmrgateway');
-        exec('sudo chmod 644 /etc/dmrgateway');
-        exec('sudo chown root:root /etc/dmrgateway');
+        exec('sudo install -m 644 -o root -g root '
+             . escapeshellarg($filepath) . ' /etc/dmrgateway');
         exec('sudo mount -o remount,ro /');
 
         // Reload the affected daemon

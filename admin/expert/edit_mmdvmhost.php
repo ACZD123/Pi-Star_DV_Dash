@@ -6,11 +6,16 @@
  * output, accepts edits via POST, then writes the result back to
  * /etc/mmdvmhost using the standard Pi-Star copy-via-/tmp pattern:
  *   1. sudo cp /etc/mmdvmhost /tmp/<obfuscated>.tmp + chown www-data
- *      + chmod 664 (so PHP can edit the temp).
+ *      + chmod 600 (so PHP can edit the temp).
  *   2. fopen('w') and fwrite the rebuilt INI text into the temp.
- *   3. sudo mount -o remount,rw / + sudo cp temp -> /etc/mmdvmhost
- *      + sudo chmod 644 + sudo chown root:root + sudo mount -o
- *      remount,ro / to seal the rootfs again.
+ *   3. sudo mount -o remount,rw / + sudo install -m 644 -o root -g
+ *      root temp -> /etc/mmdvmhost + sudo mount -o remount,ro / to
+ *      seal the rootfs again. (L-5: collapses the prior cp + chmod +
+ *      chown triplet into one atomic call — same idiom used by
+ *      configure.php's gateway-save block. The triplet would also
+ *      be rejected by the tightened /etc/sudoers.d/pistar-dashboard
+ *      because it allowlists install but not bare cp+chmod+chown
+ *      against /etc/<gateway>.)
  *   4. sudo systemctl restart mmdvmhost.service to pick up the change.
  *
  * Admin-only access; the dashboard's Apache basic-auth gate is the
@@ -132,12 +137,16 @@ if($_POST) {
         $success = fwrite($handle, $content);
         fclose($handle);
 
-        // Updates complete - copy the working file back to the proper location
-        exec('sudo mount -o remount,rw /');                // Make rootfs writable
-        exec('sudo cp ' . escapeshellarg($filepath) . ' /etc/mmdvmhost');    // Move the file back
-        exec('sudo chmod 644 /etc/mmdvmhost');                // Set the correct runtime permissions
-        exec('sudo chown root:root /etc/mmdvmhost');            // Set the owner
-        exec('sudo mount -o remount,ro /');                // Make rootfs read-only
+        // Updates complete - install the working file back to the
+        // proper location. L-5: atomic install replaces the prior
+        // cp + chmod + chown triplet (which the tightened
+        // /etc/sudoers.d/pistar-dashboard rejects on the bare
+        // chmod/chown against /etc/<file> — only the install pattern
+        // is allowlisted there).
+        exec('sudo mount -o remount,rw /');
+        exec('sudo install -m 644 -o root -g root '
+             . escapeshellarg($filepath) . ' /etc/mmdvmhost');
+        exec('sudo mount -o remount,ro /');
 
         // Reload the affected daemon
         exec('sudo systemctl restart mmdvmhost.service');        // Reload the daemon

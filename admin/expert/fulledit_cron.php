@@ -237,10 +237,12 @@ if(isset($_POST['data'])) {
                 $fh = fopen($filepath, 'w');
                 fwrite($fh, $rawData);
                 fclose($fh);
+                // L-5: atomic install replaces the prior cp + chmod +
+                // chown triplet (rejected by the tightened sudoers —
+                // see edit_mmdvmhost.php for the full rationale).
                 exec('sudo mount -o remount,rw /');
-                exec('sudo cp ' . escapeshellarg($filepath) . ' /etc/crontab');
-                exec('sudo chmod 644 /etc/crontab');
-                exec('sudo chown root:root /etc/crontab');
+                exec('sudo install -m 644 -o root -g root '
+                     . escapeshellarg($filepath) . ' /etc/crontab');
                 exec('sudo mount -o remount,ro /');
 
                 // Re-render: just-saved $rawData is what's now on disk.

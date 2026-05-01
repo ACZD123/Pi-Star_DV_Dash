@@ -6,11 +6,12 @@
  * output, accepts edits via POST, then writes the result back to
  * /etc/ysfgateway using the standard Pi-Star copy-via-/tmp pattern:
  *   1. sudo cp /etc/ysfgateway /tmp/<obfuscated>.tmp + chown www-data
- *      + chmod 664 (so PHP can edit the temp).
+ *      + chmod 600 (so PHP can edit the temp).
  *   2. fopen('w') and fwrite the rebuilt INI text into the temp.
- *   3. sudo mount -o remount,rw / + sudo cp temp -> /etc/ysfgateway
- *      + sudo chmod 644 + sudo chown root:root + sudo mount -o
- *      remount,ro / to seal the rootfs again.
+ *   3. sudo mount -o remount,rw / + sudo install -m 644 -o root -g
+ *      root temp -> /etc/ysfgateway + sudo mount -o remount,ro / to
+ *      seal the rootfs again. (See edit_mmdvmhost.php for the full
+ *      rationale on the install vs cp+chmod+chown migration.)
  *   4. sudo systemctl restart ysfgateway.service to pick up the change.
  *
  * Admin-only access; the dashboard's Apache basic-auth gate is the
@@ -115,12 +116,13 @@ if($_POST) {
         $success = fwrite($handle, $content);
         fclose($handle);
 
-        // Updates complete - copy the working file back to the proper location
-        exec('sudo mount -o remount,rw /');                // Make rootfs writable
-        exec('sudo cp ' . escapeshellarg($filepath) . ' /etc/ysfgateway');    // Move the file back
-        exec('sudo chmod 644 /etc/ysfgateway');                // Set the correct runtime permissions
-        exec('sudo chown root:root /etc/ysfgateway');            // Set the owner
-        exec('sudo mount -o remount,ro /');                // Make rootfs read-only
+        // L-5: atomic install replaces the prior cp + chmod + chown
+        // triplet (rejected by the tightened sudoers — see
+        // edit_mmdvmhost.php for the full rationale).
+        exec('sudo mount -o remount,rw /');
+        exec('sudo install -m 644 -o root -g root '
+             . escapeshellarg($filepath) . ' /etc/ysfgateway');
+        exec('sudo mount -o remount,ro /');
 
         // Reload the affected daemon
         exec('sudo systemctl restart ysfgateway.service');        // Reload the daemon
