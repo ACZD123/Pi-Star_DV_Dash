@@ -202,12 +202,20 @@ else {
 <tr><th>Tx</th><td style="background: #ffffff;"><?php echo htmlspecialchars((string)getMHZ(getConfigItem("Info", "TXFrequency", $mmdvmconfigs)), ENT_QUOTES, 'UTF-8'); ?></td></tr>
 <tr><th>Rx</th><td style="background: #ffffff;"><?php echo htmlspecialchars((string)getMHZ(getConfigItem("Info", "RXFrequency", $mmdvmconfigs)), ENT_QUOTES, 'UTF-8'); ?></td></tr>
 <?php
-if (getDVModemFirmware()) {
-echo '<tr><th>FW</th><td style="background: #ffffff;">'.htmlspecialchars((string)getDVModemFirmware(), ENT_QUOTES, 'UTF-8').'</td></tr>'."\n";
+// Each of getDVModemFirmware()/getDVModemTCXOFreq() shells out to
+// `grep ... | tail -1` over the entire MMDVM-YYYY-MM-DD.log file,
+// which can be tens of MB late in a busy day. Capturing the
+// return into a local before the truthiness test halves the per-
+// request log-grep cost (was: one fork in the if(), one for the
+// echo's value).
+$fwVersion = getDVModemFirmware();
+if ($fwVersion) {
+echo '<tr><th>FW</th><td style="background: #ffffff;">'.htmlspecialchars((string)$fwVersion, ENT_QUOTES, 'UTF-8').'</td></tr>'."\n";
 } ?>
 <?php
-if (getDVModemTCXOFreq()) {
-echo '<tr><th>TCXO</th><td style="background: #ffffff;">'.htmlspecialchars((string)getDVModemTCXOFreq(), ENT_QUOTES, 'UTF-8').'</td></tr>'."\n";
+$tcxoFreq = getDVModemTCXOFreq();
+if ($tcxoFreq) {
+echo '<tr><th>TCXO</th><td style="background: #ffffff;">'.htmlspecialchars((string)$tcxoFreq, ENT_QUOTES, 'UTF-8').'</td></tr>'."\n";
 } ?>
 </table>
 
@@ -240,7 +248,10 @@ echo "</table>\n";
 
 $testMMDVModeDMR = getConfigItem("DMR", "Enable", $mmdvmconfigs);
 if ( $testMMDVModeDMR == 1 ) { //Hide the DMR information when DMR mode not enabled.
-$dmrMasterFile = fopen("/usr/local/etc/DMR_Hosts.txt", "r");
+// DMR_Hosts.txt: read once via getDMRHostsLines() (functions.php) and
+// cached for the request, so this scan and the YSF2DMR scan further
+// down both iterate the same in-memory line array instead of two
+// separate fopen/fgets passes over a 3-6K-line SD-card file.
 $dmrMasterHost = getConfigItem("DMR Network", "Address", $mmdvmconfigs);
 $dmrMasterPort = getConfigItem("DMR Network", "Port", $mmdvmconfigs);
 if ($dmrMasterHost == '127.0.0.1') {
@@ -252,8 +263,7 @@ if ($dmrMasterHost == '127.0.0.1') {
     if (isset($configdmrgateway['DMR Network 4']['Name'])) {$dmrMasterHost4 = str_replace('_', ' ', $configdmrgateway['DMR Network 4']['Name']);}
     if (isset($configdmrgateway['DMR Network 5']['Name'])) {$dmrMasterHost5 = str_replace('_', ' ', $configdmrgateway['DMR Network 5']['Name']);}
     if (isset($configdmrgateway['DMR Network 6']['Name'])) {$dmrMasterHost6 = str_replace('_', ' ', $configdmrgateway['DMR Network 6']['Name']);}
-    while (!feof($dmrMasterFile)) {
-        $dmrMasterLine = fgets($dmrMasterFile);
+    foreach (getDMRHostsLines() as $dmrMasterLine) {
                 $dmrMasterHostF = preg_split('/\s+/', $dmrMasterLine);
         if ((count($dmrMasterHostF) >= 2) && (strpos($dmrMasterHostF[0], '#') === FALSE) && ($dmrMasterHostF[0] != '')) {
             if ((strpos($dmrMasterHostF[0], 'XLX_') === 0) && ($xlxMasterHost1 == $dmrMasterHostF[2])) { $xlxMasterHost1 = str_replace('_', ' ', $dmrMasterHostF[0]); }
@@ -270,8 +280,7 @@ if ($dmrMasterHost == '127.0.0.1') {
     if (isset($dmrMasterHost6)) { if (strlen($dmrMasterHost6) > 19) { $dmrMasterHost6 = substr($dmrMasterHost6, 0, 17) . '..'; } }
 }
 else {
-    while (!feof($dmrMasterFile)) {
-        $dmrMasterLine = fgets($dmrMasterFile);
+    foreach (getDMRHostsLines() as $dmrMasterLine) {
                 $dmrMasterHostF = preg_split('/\s+/', $dmrMasterLine);
         if ((count($dmrMasterHostF) >= 4) && (strpos($dmrMasterHostF[0], '#') === FALSE) && ($dmrMasterHostF[0] != '')) {
             if (($dmrMasterHost == $dmrMasterHostF[2]) && ($dmrMasterPort == $dmrMasterHostF[4])) { $dmrMasterHost = str_replace('_', ' ', $dmrMasterHostF[0]); }
@@ -279,7 +288,6 @@ else {
     }
     if (strlen($dmrMasterHost) > 19) { $dmrMasterHost = substr($dmrMasterHost, 0, 17) . '..'; }
 }
-fclose($dmrMasterFile);
 
 echo "<br />\n";
 echo "<table>\n";
@@ -376,17 +384,17 @@ if ( $testMMDVModeYSF == 1 || $testDMR2YSF ) { //Hide the YSF information when S
 
 if ( isset($configysf2dmr['Enabled']['Enabled']) ) { $testYSF2DMR = $configysf2dmr['Enabled']['Enabled']; }
 if ( $testYSF2DMR ) { //Hide the YSF2DMR information when YSF2DMR Network mode not enabled.
-        $dmrMasterFile = fopen("/usr/local/etc/DMR_Hosts.txt", "r");
+        // Reuses the in-memory DMR_Hosts.txt line array cached by
+        // getDMRHostsLines() — same data the DMR block above just
+        // walked, no second SD-card read.
         $dmrMasterHost = $configysf2dmr['DMR Network']['Address'];
-        while (!feof($dmrMasterFile)) {
-                $dmrMasterLine = fgets($dmrMasterFile);
+        foreach (getDMRHostsLines() as $dmrMasterLine) {
                 $dmrMasterHostF = preg_split('/\s+/', $dmrMasterLine);
         if ((count($dmrMasterHostF) >= 2) && (strpos($dmrMasterHostF[0], '#') === FALSE) && ($dmrMasterHostF[0] != '')) {
                         if ($dmrMasterHost == $dmrMasterHostF[2]) { $dmrMasterHost = str_replace('_', ' ', $dmrMasterHostF[0]); }
                 }
         }
         if (strlen($dmrMasterHost) > 19) { $dmrMasterHost = substr($dmrMasterHost, 0, 17) . '..'; }
-        fclose($dmrMasterFile);
 
         echo "<br />\n";
         echo "<table>\n";

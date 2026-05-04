@@ -41,15 +41,51 @@
 
 function getMMDVMConfig()
 {
-    // loads /etc/mmdvmhost into array for further use
-    $conf = array();
+    // /etc/mmdvmhost is read once per request and cached for the
+    // remainder. The top-level init at the bottom of this file
+    // calls us once, and getDSTARLinks() calls us again on D-Star
+    // hosts — same request, same file, identical result. The
+    // static cache resets at request shutdown (PHP-FPM does not
+    // preserve userland state between requests), so this is purely
+    // an in-request dedup, not a cross-request cache.
+    static $cached;
+    if ($cached !== null) {
+        return $cached;
+    }
+    $cached = array();
     if ($configs = @fopen(MMDVMINIPATH."/".MMDVMINIFILENAME, 'r')) {
         while ($config = fgets($configs)) {
-            array_push($conf, trim ( $config, " \t\n\r\0\x0B"));
+            array_push($cached, trim($config, " \t\n\r\0\x0B"));
         }
         fclose($configs);
     }
-    return $conf;
+    return $cached;
+}
+
+function getDMRHostsLines()
+{
+    // /usr/local/etc/DMR_Hosts.txt is the BrandMeister master list,
+    // typically 3-6K lines on SD storage. repeaterinfo.php scans it
+    // twice per request when both DMR and YSF2DMR are enabled (lines
+    // 243-282 and 379-389) — both consumers iterate the same lines
+    // looking for an IP→name match. Read once into an in-memory
+    // line array; foreach() across it is free.
+    //
+    // Per-request scope only (PHP-FPM resets userland state between
+    // requests). file() loads the whole file in one syscall, which
+    // is cheaper than ~6K fgets() calls and roughly the same memory
+    // (~400-800 KB for the typical hosts file — fine on the 512 MB+
+    // Pi-Star supports).
+    static $cached;
+    if ($cached !== null) {
+        return $cached;
+    }
+    $cached = @file('/usr/local/etc/DMR_Hosts.txt',
+                    FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if ($cached === false) {
+        $cached = array();
+    }
+    return $cached;
 }
 
 function getYSFGatewayConfig()
