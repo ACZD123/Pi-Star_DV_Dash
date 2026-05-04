@@ -68,7 +68,15 @@ if ($_SERVER["PHP_SELF"] == "/admin/expert/modem_fw_upgrade.php") {
     // truncate creates+clears the log file in one synchronous call —
     // see admin/update.php for the full rationale.
     system('sudo truncate -s 0 /var/log/pi-star/pi-star_modemflash.log');
-    if (isset($selectedOption)) { system('sudo NP=1 /usr/local/sbin/pistar-modemupgrade ' . escapeshellarg($selectedOption) . ' > /dev/null 2>&1 &'); }
+    // No `NP=1` env-var prefix: the path-scoped sudoers refuses
+    // env-var pass-through without a SETENV: tag, so `sudo NP=1
+    // pistar-modemupgrade …` was rejected outright with "you are
+    // not allowed to set the following environment variables: NP"
+    // and the flash silently never started. The wrapper now
+    // auto-detects non-interactive mode via `[ -t 0 ]` (it's
+    // backgrounded here with no controlling terminal), so the
+    // explicit env var is no longer needed.
+    if (isset($selectedOption)) { system('sudo /usr/local/sbin/pistar-modemupgrade ' . escapeshellarg($selectedOption) . ' > /dev/null 2>&1 &'); }
     }
 
     // passed sanity chk.
