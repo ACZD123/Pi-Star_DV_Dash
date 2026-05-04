@@ -6,4 +6,4 @@
  * Surfaced in the dashboard banner and in the `meta generator` tag.
  */
 
-$version = '20260501';
+$version = '20260504';
