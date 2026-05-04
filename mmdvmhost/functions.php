@@ -39,6 +39,113 @@
  * by callers (parent pages set headers; this is library code).
  */
 
+/**
+ * Read the last $maxMatches lines from $path that match $matchRegex
+ * and (if non-empty) do NOT match $excludeRegex. Replaces the
+ * `egrep ... | sed ... | tail -N [| tac]` shell pipelines that
+ * every gateway-log helper used to fork on every dashboard poll.
+ *
+ * The original pipeline read the *whole* day's log file (10-50 MB
+ * late in a busy day) just to filter and tail it. This reads only
+ * the last 256 KB of the file via fseek + fread — typically 4-10×
+ * more raw bytes than are needed to find the last 250 dashboard-
+ * relevant matches even on noisy DMR hotspots, so the visible
+ * behaviour matches the old pipeline in every common case while
+ * cutting the per-poll I/O by ~200×. Zero forks.
+ *
+ * Trade-off: an extreme noise burst at the end of a log (e.g. a
+ * sudden flood of CSBK / overflow / Downlink lines that all get
+ * filtered out) could in theory leave fewer than $maxMatches in
+ * the 256 KB tail. The today/yesterday fallback in the callers
+ * compensates for one common case (just-past-midnight). If a
+ * really noisy hotspot ever needs more headroom, bump $bufSize.
+ *
+ * Pure core PHP. Compatible with PHP 7.0+.
+ *
+ * @param string $path           absolute path to the log file
+ * @param string $matchRegex     PCRE; lines kept only if they match
+ * @param string $excludeRegex   PCRE; lines dropped if they match.
+ *                               Empty string disables the exclude pass.
+ * @param int    $maxMatches     max number of matching lines to return
+ * @param bool   $stripFirstField if true, replaces `cut -d" " -f2-`:
+ *                               drop everything up to (and including)
+ *                               the first space in each surviving line
+ * @param bool   $reverse        if true, reverses the result order
+ *                               (replaces `| tac` in the DAPNET path)
+ * @return array<int,string>     up to $maxMatches matching lines
+ */
+function pistar_log_tail_match($path, $matchRegex, $excludeRegex,
+                               $maxMatches, $stripFirstField = false,
+                               $reverse = false)
+{
+    $bufSize = 262144; // 256 KB tail window — see docblock above
+
+    $fp = @fopen($path, 'rb');
+    if ($fp === false) {
+        return array();
+    }
+    if (fseek($fp, 0, SEEK_END) !== 0) {
+        fclose($fp);
+        return array();
+    }
+    $fileSize = ftell($fp);
+    if ($fileSize === false || $fileSize === 0) {
+        fclose($fp);
+        return array();
+    }
+
+    $readSize = min($bufSize, $fileSize);
+    $readFrom = $fileSize - $readSize;
+    if (fseek($fp, $readFrom, SEEK_SET) !== 0) {
+        fclose($fp);
+        return array();
+    }
+    $buf = fread($fp, $readSize);
+    fclose($fp);
+    if ($buf === false || $buf === '') {
+        return array();
+    }
+
+    // If we started reading mid-file, the first line in $buf is
+    // almost certainly cut by the chunk boundary. Drop bytes up
+    // to and including the first newline so we never feed a
+    // partial line to the regex pass. (When $readFrom == 0 we're
+    // at the start of the file — the first line is real, keep it.)
+    if ($readFrom > 0) {
+        $nl = strpos($buf, "\n");
+        if ($nl === false) {
+            return array();
+        }
+        $buf = substr($buf, $nl + 1);
+    }
+
+    $matched = array();
+    $lines   = explode("\n", $buf);
+    foreach ($lines as $line) {
+        if ($line === '') continue;
+        if (!preg_match($matchRegex, $line)) continue;
+        if ($excludeRegex !== '' && preg_match($excludeRegex, $line)) continue;
+        $matched[] = $line;
+    }
+
+    if (count($matched) > $maxMatches) {
+        $matched = array_slice($matched, -$maxMatches);
+    }
+    if ($stripFirstField) {
+        foreach ($matched as &$mline) {
+            $sp = strpos($mline, ' ');
+            if ($sp !== false) {
+                $mline = substr($mline, $sp + 1);
+            }
+        }
+        unset($mline);
+    }
+    if ($reverse) {
+        $matched = array_reverse($matched);
+    }
+    return $matched;
+}
+
 function getMMDVMConfig()
 {
     // /etc/mmdvmhost is read once per request and cached for the
@@ -334,136 +441,119 @@ function showMode($mode, $mmdvmconfigs)
 
 function getMMDVMLog()
 {
-    // Open Logfile and copy loglines into LogLines-Array()
-    $logLines = array();
-    $logLines1 = array();
+    // Last 250 dashboard-relevant lines from today's MMDVM log,
+    // falling back to yesterday's tail if today is sparse (just-
+    // past-midnight case). The egrep|sed|tail shell pipeline that
+    // used to live here forked three processes per call AND
+    // streamed the whole day's log through them on every poll —
+    // see pistar_log_tail_match() for the rationale.
+    $logToday  = MMDVMLOGPATH."/".MMDVMLOGPREFIX."-".gmdate("Y-m-d").".log";
+    $logYstday = MMDVMLOGPATH."/".MMDVMLOGPREFIX."-".gmdate("Y-m-d", time() - 86340).".log";
+    $matchR    = '/^M.*(from|end|watchdog|lost|slow data)/';
+    $excR      = '/(CSBK|overflow|Downlink)/';
+
+    $logLines1 = file_exists($logToday)
+        ? pistar_log_tail_match($logToday, $matchR, $excR, 250)
+        : array();
     $logLines2 = array();
-    if (file_exists(MMDVMLOGPATH."/".MMDVMLOGPREFIX."-".gmdate("Y-m-d").".log")) {
-        $logPath = MMDVMLOGPATH."/".MMDVMLOGPREFIX."-".gmdate("Y-m-d").".log";
-        $logLines1 = explode("\n", `egrep -h "^M.*(from|end|watchdog|lost|slow data)" $logPath | sed '/\(CSBK\|overflow\|Downlink\)/d' | tail -250`);
+    if (sizeof($logLines1) < 250 && file_exists($logYstday)) {
+        $logLines2 = pistar_log_tail_match($logYstday, $matchR, $excR, 250);
     }
-    $logLines1 = array_slice($logLines1, -250);
-    if (sizeof($logLines1) < 250) {
-        if (file_exists(MMDVMLOGPATH."/".MMDVMLOGPREFIX."-".gmdate("Y-m-d", time() - 86340).".log")) {
-            $logPath = MMDVMLOGPATH."/".MMDVMLOGPREFIX."-".gmdate("Y-m-d", time() - 86340).".log";
-            $logLines2 = explode("\n", `egrep -h "^M.*(from|end|watchdog|lost|slow data)" $logPath | sed '/\(CSBK\|overflow\|Downlink\)/d' | tail -250`);
-        }
-    }
-    $logLines2 = array_slice($logLines2, -250);
+    // Preserve the original union-by-key + final tail-slice
+    // semantics: today's matches take the low indices, yesterday's
+    // fill any higher slots up to 250 total.
     $logLines = $logLines1 + $logLines2;
-    $logLines = array_slice($logLines, -250);
-    return $logLines;
+    return array_slice($logLines, -250);
 }
 
 function getYSFGatewayLog()
 {
-    // Open Logfile and copy loglines into LogLines-Array()
-    $logLines = array();
-    $logLines1 = array();
-    $logLines2 = array();
-    if (file_exists(YSFGATEWAYLOGPATH."/".YSFGATEWAYLOGPREFIX."-".gmdate("Y-m-d").".log")) {
-        $logPath1 = YSFGATEWAYLOGPATH."/".YSFGATEWAYLOGPREFIX."-".gmdate("Y-m-d").".log";
-        $logLines1 = preg_split('/\r\n|\r|\n/', `egrep -h "^M.*(onnection to|onnect to|inked|isconnect|Opening YSF network)" $logPath1 | sed '/Linked to MMDVM/d' | sed '/Link successful to MMDVM/d' | sed '/*Link/d' | tail -1`);
+    // Last 1 link-state line from today's YSFGateway log, falling
+    // back to yesterday if today has none.
+    $logToday  = YSFGATEWAYLOGPATH."/".YSFGATEWAYLOGPREFIX."-".gmdate("Y-m-d").".log";
+    $logYstday = YSFGATEWAYLOGPATH."/".YSFGATEWAYLOGPREFIX."-".gmdate("Y-m-d", time() - 86340).".log";
+    $matchR    = '/^M.*(onnection to|onnect to|inked|isconnect|Opening YSF network)/';
+    $excR      = '/(Linked to MMDVM|Link successful to MMDVM|\*Link)/';
+
+    $logLines = file_exists($logToday)
+        ? pistar_log_tail_match($logToday, $matchR, $excR, 1)
+        : array();
+    if (sizeof($logLines) === 0 && file_exists($logYstday)) {
+        $logLines = pistar_log_tail_match($logYstday, $matchR, $excR, 1);
     }
-    $logLines1 = array_filter($logLines1);
-    if (sizeof($logLines1) == 0) {
-        if (file_exists(YSFGATEWAYLOGPATH."/".YSFGATEWAYLOGPREFIX."-".gmdate("Y-m-d", time() - 86340).".log")) {
-            $logPath2 = YSFGATEWAYLOGPATH."/".YSFGATEWAYLOGPREFIX."-".gmdate("Y-m-d", time() - 86340).".log";
-            $logLines1 = preg_split('/\r\n|\r|\n/', `egrep -h "^M.*(onnection to|onnect to|inked|isconnect|Opening YSF network)" $logPath2 | sed '/Linked to MMDVM/d' | sed '/Link successful to MMDVM/d' | sed '/*Link/d' | tail -1`);
-        }
-        $logLines2 = array_filter($logLines2);
-    }
-    if (sizeof($logLines1) == 0) { $logLines = $logLines2; } else { $logLines = $logLines1; }
-        return array_filter($logLines);
+    return $logLines;
 }
 
 function getP25GatewayLog()
 {
-        // Open Logfile and copy loglines into LogLines-Array()
-        $logLines = array();
-    $logLines1 = array();
-    $logLines2 = array();
-        if (file_exists(P25GATEWAYLOGPATH."/".P25GATEWAYLOGPREFIX."-".gmdate("Y-m-d").".log")) {
-        $logPath1 = P25GATEWAYLOGPATH."/".P25GATEWAYLOGPREFIX."-".gmdate("Y-m-d").".log";
-        $logLines1 = preg_split('/\r\n|\r|\n/', `egrep -h "^M.*(ink|Starting|witched)" $logPath1 | cut -d" " -f2- | tail -1`);
-        }
-    $logLines1 = array_filter($logLines1);
-        if (sizeof($logLines1) == 0) {
-                if (file_exists(P25GATEWAYLOGPATH."/".P25GATEWAYLOGPREFIX."-".gmdate("Y-m-d", time() - 86340).".log")) {
-                        $logPath2 = P25GATEWAYLOGPATH."/".P25GATEWAYLOGPREFIX."-".gmdate("Y-m-d", time() - 86340).".log";
-            $logLines2 = preg_split('/\r\n|\r|\n/', `egrep -h "^M.*(ink|Starting|witched)" $logPath2 | cut -d" " -f2- | tail -1`);
-                }
-        $logLines2 = array_filter($logLines2);
-        }
-    if (sizeof($logLines1) == 0) { $logLines = $logLines2; } else { $logLines = $logLines1; }
-        return array_filter($logLines);
+    // Last 1 link-state line from today's P25Gateway log, falling
+    // back to yesterday if today has none. The first space-
+    // delimited field (severity letter) is stripped to match the
+    // original `cut -d" " -f2-` step.
+    $logToday  = P25GATEWAYLOGPATH."/".P25GATEWAYLOGPREFIX."-".gmdate("Y-m-d").".log";
+    $logYstday = P25GATEWAYLOGPATH."/".P25GATEWAYLOGPREFIX."-".gmdate("Y-m-d", time() - 86340).".log";
+    $matchR    = '/^M.*(ink|Starting|witched)/';
+
+    $logLines = file_exists($logToday)
+        ? pistar_log_tail_match($logToday, $matchR, '', 1, true)
+        : array();
+    if (sizeof($logLines) === 0 && file_exists($logYstday)) {
+        $logLines = pistar_log_tail_match($logYstday, $matchR, '', 1, true);
+    }
+    return $logLines;
 }
 
 function getNXDNGatewayLog()
 {
-        // Open Logfile and copy loglines into LogLines-Array()
-        $logLines = array();
-    $logLines1 = array();
-    $logLines2 = array();
-        if (file_exists("/var/log/pi-star/NXDNGateway-".gmdate("Y-m-d").".log")) {
-        $logPath1 = "/var/log/pi-star/NXDNGateway-".gmdate("Y-m-d").".log";
-        $logLines1 = preg_split('/\r\n|\r|\n/', `egrep -h "^M.*(ink|Starting|witched)" $logPath1 | cut -d" " -f2- | tail -1`);
-        }
-    $logLines1 = array_filter($logLines1);
-        if (sizeof($logLines1) == 0) {
-                if (file_exists("/var/log/pi-star/NXDNGateway-".gmdate("Y-m-d", time() - 86340).".log")) {
-            $logPath2 = "/var/log/pi-star/NXDNGateway-".gmdate("Y-m-d", time() - 86340).".log";
-            $logLines2 = preg_split('/\r\n|\r|\n/', `egrep -h "^M.*(ink|Starting|witched)" $logPath2 | cut -d" " -f2- | tail -1`);
-                }
-        $logLines2 = array_filter($logLines2);
-        }
-    if (sizeof($logLines1) == 0) { $logLines = $logLines2; } else { $logLines = $logLines1; }
-        return array_filter($logLines);
+    // Last 1 link-state line from today's NXDNGateway log; see
+    // getP25GatewayLog for the full rationale (same shape).
+    $logToday  = "/var/log/pi-star/NXDNGateway-".gmdate("Y-m-d").".log";
+    $logYstday = "/var/log/pi-star/NXDNGateway-".gmdate("Y-m-d", time() - 86340).".log";
+    $matchR    = '/^M.*(ink|Starting|witched)/';
+
+    $logLines = file_exists($logToday)
+        ? pistar_log_tail_match($logToday, $matchR, '', 1, true)
+        : array();
+    if (sizeof($logLines) === 0 && file_exists($logYstday)) {
+        $logLines = pistar_log_tail_match($logYstday, $matchR, '', 1, true);
+    }
+    return $logLines;
 }
 
 function getM17GatewayLog()
 {
-        // Open Logfile and copy loglines into LogLines-Array()
-        $logLines = array();
-    $logLines1 = array();
-    $logLines2 = array();
-        if (file_exists("/var/log/pi-star/M17Gateway-".gmdate("Y-m-d").".log")) {
-        $logPath1 = "/var/log/pi-star/M17Gateway-".gmdate("Y-m-d").".log";
-        $logLines1 = preg_split('/\r\n|\r|\n/', `egrep -h "^M.*(ink|Starting|witched)" $logPath1 | cut -d" " -f2- | tail -1`);
-        }
-    $logLines1 = array_filter($logLines1);
-        if (sizeof($logLines1) == 0) {
-                if (file_exists("/var/log/pi-star/M17Gateway-".gmdate("Y-m-d", time() - 86340).".log")) {
-            $logPath2 = "/var/log/pi-star/M17Gateway-".gmdate("Y-m-d", time() - 86340).".log";
-            $logLines2 = preg_split('/\r\n|\r|\n/', `egrep -h "^M.*(ink|Starting|witched)" $logPath2 | cut -d" " -f2- | tail -1`);
-                }
-        $logLines2 = array_filter($logLines2);
-        }
-    if (sizeof($logLines1) == 0) { $logLines = $logLines2; } else { $logLines = $logLines1; }
-        return array_filter($logLines);
+    // Last 1 link-state line from today's M17Gateway log; see
+    // getP25GatewayLog for the full rationale (same shape).
+    $logToday  = "/var/log/pi-star/M17Gateway-".gmdate("Y-m-d").".log";
+    $logYstday = "/var/log/pi-star/M17Gateway-".gmdate("Y-m-d", time() - 86340).".log";
+    $matchR    = '/^M.*(ink|Starting|witched)/';
+
+    $logLines = file_exists($logToday)
+        ? pistar_log_tail_match($logToday, $matchR, '', 1, true)
+        : array();
+    if (sizeof($logLines) === 0 && file_exists($logYstday)) {
+        $logLines = pistar_log_tail_match($logYstday, $matchR, '', 1, true);
+    }
+    return $logLines;
 }
 
 function getDAPNETGatewayLog()
 {
-        // Open Logfile and copy loglines into LogLines-Array()
-        $logLines = array();
-    $logLines1 = array();
-    $logLines2 = array();
-        if (file_exists("/var/log/pi-star/DAPNETGateway-".gmdate("Y-m-d").".log")) {
-        $logPath1 = "/var/log/pi-star/DAPNETGateway-".gmdate("Y-m-d").".log";
-        $logLines1 = preg_split('/\r\n|\r|\n/', `egrep -h "^M.*(Sending message)" $logPath1 | cut -d" " -f2- | tail -n 20 | tac`);
-        }
-    $logLines1 = array_filter($logLines1);
-        if (sizeof($logLines1) == 0) {
-                if (file_exists("/var/log/pi-star/DAPNETGateway-".gmdate("Y-m-d", time() - 86340).".log")) {
-            $logPath2 = "/var/log/pi-star/DAPNETGateway-".gmdate("Y-m-d", time() - 86340).".log";
-            $logLines2 = preg_split('/\r\n|\r|\n/', `egrep -h "^M.*(Sending message)" $logPath2 | cut -d" " -f2- | tail -n 20 | tac`);
-                }
-        $logLines2 = array_filter($logLines2);
-        }
-    $logLines = $logLines1 + $logLines2;
-    $logLines = array_slice($logLines, -20);
-    return array_filter($logLines);
+    // Last 20 "Sending message" lines from today's DAPNETGateway
+    // log (or yesterday's if today is silent), reversed so the
+    // most recent message appears first. The original pipeline
+    // ended with `tail -n 20 | tac`; the helper does both.
+    $logToday  = "/var/log/pi-star/DAPNETGateway-".gmdate("Y-m-d").".log";
+    $logYstday = "/var/log/pi-star/DAPNETGateway-".gmdate("Y-m-d", time() - 86340).".log";
+    $matchR    = '/^M.*(Sending message)/';
+
+    $logLines = file_exists($logToday)
+        ? pistar_log_tail_match($logToday, $matchR, '', 20, true, true)
+        : array();
+    if (sizeof($logLines) === 0 && file_exists($logYstday)) {
+        $logLines = pistar_log_tail_match($logYstday, $matchR, '', 20, true, true);
+    }
+    return $logLines;
 }
 
 // 00000000001111111111222222222233333333334444444444555555555566666666667777777777888888888899999999990000000000111111111122
