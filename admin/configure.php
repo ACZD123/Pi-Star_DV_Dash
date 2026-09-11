@@ -1803,7 +1803,7 @@ if ($_SERVER["PHP_SELF"] == "/admin/configure.php") {
       }
 
       if ( $confHardware == 'icomTerminalAuto' ) {
-        config_writer_stage_flat('/etc/dstarrepeater', 'modemType', 'Icom Access Point\/Terminal Mode');
+        config_writer_stage_flat('/etc/dstarrepeater', 'modemType', 'Icom Access Point/Terminal Mode');
         config_writer_stage_flat('/etc/dstarrepeater', 'icomPort', '/dev/icom_ta');
         config_writer_stage_flat('/etc/dstarrepeater', 'rpt1Validation', '0');
         $configmmdvm['Modem']['Protocol'] = "uart";
